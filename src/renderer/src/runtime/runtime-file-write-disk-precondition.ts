@@ -1,5 +1,6 @@
 import {
   compareDiskWritePrecondition,
+  diskConflictFromReadFailure,
   type FileWriteDiskConflict,
   type FileWriteDiskPrecondition
 } from '../../../shared/file-write-disk-precondition'
@@ -10,7 +11,7 @@ import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
 
 /**
  * For a host that would strip the precondition: compare from here before the unguarded write.
- * Why a read failure throws unless a missing file is allowed: an unverifiable autosave must not write.
+ * A read failure that doesn't prove the disk state fails the save rather than writing unverified.
  */
 export async function checkDiskPreconditionFromClient(
   context: RuntimeFileOperationArgs & { target: RuntimeClientTarget & { kind: 'environment' } },
@@ -28,10 +29,7 @@ export async function checkDiskPreconditionFromClient(
       expectedExternalSshTargetId: context.expectedExternalSshTargetId
     })
   } catch (error) {
-    if (precondition.allowMissing === true) {
-      return null
-    }
-    throw error
+    return diskConflictFromReadFailure(precondition, error)
   }
   return compareDiskWritePrecondition(precondition, current.isBinary ? undefined : current.content)
 }

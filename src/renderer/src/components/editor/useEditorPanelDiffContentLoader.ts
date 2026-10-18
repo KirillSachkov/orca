@@ -11,6 +11,7 @@ import {
 import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
 import type { DiffContent, InFlightContentRead } from './editor-panel-content-types'
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
+import { stampCleanWorkingFileDiffBaseline } from './working-file-diff-disk-baseline'
 import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
 
 const inFlightDiffReads = new Map<string, InFlightContentRead<DiffContent>>()
@@ -160,6 +161,13 @@ export function useEditorPanelDiffContentLoader({
           return
         }
         setDiffContents((prev) => ({ ...prev, [file.id]: result }))
+        // Why: an unstaged diff saves to the working file, so its guarded save needs that baseline too.
+        stampCleanWorkingFileDiffBaseline(
+          useAppStore.getState(),
+          file.id,
+          effectiveDiffSource,
+          result
+        )
       } catch (err) {
         if (diffReadGenerationRef.current[file.id] !== generation) {
           return

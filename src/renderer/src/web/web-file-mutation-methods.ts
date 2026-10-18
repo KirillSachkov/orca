@@ -5,6 +5,7 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
 import {
   compareDiskWritePrecondition,
+  diskConflictFromReadFailure,
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
   parseFileWriteResult,
   type FileWriteDiskConflict,
@@ -86,11 +87,7 @@ async function checkWebDiskPreconditionFromClient(
       relativePath: file.relativePath
     })
   } catch (error) {
-    // Why: an unverifiable autosave must not write; an explicit save keeps its old behavior.
-    if (precondition.allowMissing === true) {
-      return null
-    }
-    throw error
+    return diskConflictFromReadFailure(precondition, error)
   }
   const text =
     typeof preview === 'object' &&

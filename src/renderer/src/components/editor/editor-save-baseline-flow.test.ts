@@ -113,6 +113,27 @@ describe('editor save baseline flow', () => {
     }
   })
 
+  it('does not let a save queued behind a refused one overwrite through the banner it raised', async () => {
+    const { disk, store } = setUp('agent rewrite', 'original', 'mine')
+    store.setState({ settings: null })
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      const first = requestEditorFileSave({ fileId: FILE_ID })
+      const second = requestEditorFileSave({ fileId: FILE_ID })
+
+      await expect(first).rejects.toThrow()
+      await expect(second).rejects.toThrow()
+      expect(disk.files.get(FILE_ID)).toBe('agent rewrite')
+      expect(liveFile(store)?.externalMutation).toBe('changed')
+
+      // A save requested once the banner is showing is the user's overwrite choice.
+      await requestEditorFileSave({ fileId: FILE_ID })
+      expect(disk.files.get(FILE_ID)).toBe('mine')
+    } finally {
+      cleanup()
+    }
+  })
+
   it('baselines what disk holds after writing a lone surrogate', async () => {
     const { disk, store } = setUp('original', 'original', 'broken \uD800 pair')
     store.setState({ settings: null })
@@ -186,6 +207,30 @@ describe('editor save baseline flow', () => {
       expect(disk.files.get(FILE_ID)).toBe('mine')
       expect(liveFile(store)?.externalMutation).toBeUndefined()
       expect(liveFile(store)?.diskOverwriteIntent).toBeUndefined()
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('keeps autosave from recreating a file Keep My Edits finds deleted; explicit save may', async () => {
+    const { disk, store } = setUp('agent rewrite', 'original', 'mine')
+    disk.files.delete(FILE_ID)
+    store.getState().setExternalMutation(FILE_ID, 'changed')
+    mocks.readRuntimeFileContent.mockRejectedValue(
+      new Error(
+        "Error invoking remote method 'fs:readFile': Error: ENOENT: no such file or directory"
+      )
+    )
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      keepTabEditsOverExternalChange(liveFile(store)!)
+      await vi.advanceTimersByTimeAsync(1500)
+
+      expect(disk.files.has(FILE_ID)).toBe(false)
+      expect(liveFile(store)?.externalMutation).toBe('deleted')
+
+      await requestEditorFileSave({ fileId: FILE_ID })
+      expect(disk.files.get(FILE_ID)).toBe('mine')
     } finally {
       cleanup()
     }

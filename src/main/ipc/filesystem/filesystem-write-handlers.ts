@@ -1,5 +1,5 @@
 import { ipcMain, shell } from 'electron'
-import { lstat, writeFile } from 'node:fs/promises'
+import { lstat } from 'node:fs/promises'
 import type { SshMutationExpectation } from '../../../shared/ssh-types'
 import { assertSshMutationExpectation } from '../../ssh/ssh-connection-generation'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
@@ -16,12 +16,11 @@ import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { assertLocalWriteTargetIsRegularFile } from './local-regular-file-read'
 import { runNativeChatScratchSave } from '../../native-chat/native-chat-scratch-folder-lock'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
-import {
-  FILE_WRITE_OK,
-  type FileWriteDiskPrecondition,
-  type FileWriteResult
+import type {
+  FileWriteDiskPrecondition,
+  FileWriteResult
 } from '../../../shared/file-write-disk-precondition'
-import { checkLocalDiskWritePrecondition } from './local-disk-write-precondition'
+import { writeLocalTextFileWithDiskPrecondition } from './local-disk-write-precondition'
 
 export function registerFilesystemWriteHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
@@ -60,20 +59,8 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
       }
       await assertLocalWriteTargetIsRegularFile(filePath)
       const precondition = args.diskPrecondition
-      return runNativeChatScratchSave(
-        getProfileUserDataPath(),
-        filePath,
-        async (): Promise<FileWriteResult> => {
-          // Why: compare inside the save lock, right before the write, to keep the race window minimal.
-          const diskConflict = precondition
-            ? await checkLocalDiskWritePrecondition(filePath, precondition)
-            : null
-          if (diskConflict) {
-            return { ok: false, diskConflict }
-          }
-          await writeFile(filePath, args.content, 'utf-8')
-          return FILE_WRITE_OK
-        }
+      return runNativeChatScratchSave(getProfileUserDataPath(), filePath, () =>
+        writeLocalTextFileWithDiskPrecondition(filePath, args.content, precondition)
       )
     }
   )

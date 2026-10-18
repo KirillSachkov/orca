@@ -11,19 +11,25 @@ export const SAVE_REFUSED_CHANGED_ON_DISK_MESSAGE =
 export const SAVE_REFUSED_DELETED_ON_DISK_MESSAGE = 'This file was deleted on disk.'
 
 /**
- * The disk state a save may overwrite: the content this tab's edits are based on.
- * Why no precondition for an explicit save under the changed-on-disk banner: that save is the
- * banner's "overwrite" choice, and the banner already warned the newer disk content will be lost.
+ * Why at enqueue: an explicit save requested while the changed-on-disk banner shows is the banner's
+ * "overwrite" choice. Judged at execution, a save queued behind the refusal that raised the banner
+ * would read the banner as permission.
  */
-export function getSaveDiskPrecondition(
-  file: Pick<OpenFile, 'lastKnownDiskSignature' | 'externalMutation' | 'diskOverwriteIntent'>,
+export function isConfirmedDiskOverwrite(
+  file: Pick<OpenFile, 'externalMutation'> | undefined,
   trigger: 'autosave' | 'user'
+): boolean {
+  return trigger === 'user' && file?.externalMutation === 'changed'
+}
+
+/** The disk state a save may overwrite: the content this tab's edits are based on. */
+export function getSaveDiskPrecondition(
+  file: Pick<OpenFile, 'lastKnownDiskSignature' | 'diskOverwriteIntent'>,
+  trigger: 'autosave' | 'user',
+  overwriteConfirmed: boolean
 ): FileWriteDiskPrecondition | undefined {
   // Why: "Keep My Edits" already chose to overwrite; until its baseline read lands, a guard would refuse that choice.
-  if (!file.lastKnownDiskSignature || file.diskOverwriteIntent) {
-    return undefined
-  }
-  if (trigger === 'user' && file.externalMutation === 'changed') {
+  if (!file.lastKnownDiskSignature || file.diskOverwriteIntent || overwriteConfirmed) {
     return undefined
   }
   // Why: an explicit save may recreate a deleted file (nothing on disk to lose); autosave must not resurrect it.

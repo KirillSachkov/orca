@@ -39,3 +39,27 @@ export function parseFileWriteResult(value: unknown): FileWriteResult {
   const diskConflict = 'diskConflict' in value ? value.diskConflict : undefined
   return { ok: false, diskConflict: diskConflict === 'missing' ? 'missing' : 'changed' }
 }
+
+/** Only an ENOENT proves the file is gone; a lost transport proves nothing. */
+export function isConfirmedFileNotFoundError(error: unknown): boolean {
+  return error instanceof Error && /\bENOENT\b/.test(error.message)
+}
+
+function isFileTooLargeToReadError(error: unknown): boolean {
+  return error instanceof Error && /\btoo large\b|\bis larger than\b/i.test(error.message)
+}
+
+/** Settles a precondition whose disk read failed; rethrows anything that doesn't prove the disk state. */
+export function diskConflictFromReadFailure(
+  precondition: FileWriteDiskPrecondition,
+  error: unknown
+): FileWriteDiskConflict | null {
+  if (isConfirmedFileNotFoundError(error)) {
+    return compareDiskWritePrecondition(precondition, null)
+  }
+  // Why: the baseline was read whole, so content too big to read now cannot match it.
+  if (isFileTooLargeToReadError(error)) {
+    return 'changed'
+  }
+  throw error
+}

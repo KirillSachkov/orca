@@ -19,6 +19,7 @@ import { localAccess } from './runtime-file-read-client'
 import { REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES } from '../../../shared/remote-runtime-memory-limits'
 import {
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
+  FILE_WRITE_OK,
   parseFileWriteResult,
   type FileWriteDiskPrecondition,
   type FileWriteResult
@@ -86,14 +87,15 @@ export async function writeRuntimeFile(
     relativePath: remoteArgs.relativePath,
     content
   })
+  if (!diskPrecondition) {
+    await callRuntimeFileMutation(remoteArgs.target, 'files.write', params, 15_000)
+    return FILE_WRITE_OK
+  }
   return parseFileWriteResult(
     await callRuntimeFileMutationWithCapabilities<unknown>(
       remoteArgs.target,
       'files.write',
       async (capabilities) => {
-        if (!diskPrecondition) {
-          return { params }
-        }
         if (capabilities.includes(FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY)) {
           return { params: { ...params, diskPrecondition } }
         }

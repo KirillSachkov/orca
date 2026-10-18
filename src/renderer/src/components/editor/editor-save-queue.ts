@@ -24,6 +24,7 @@ import type { FileWriteResult } from '../../../../shared/file-write-disk-precond
 import {
   applySaveDiskConflict,
   getSaveDiskPrecondition,
+  isConfirmedDiskOverwrite,
   SAVE_REFUSED_CHANGED_ON_DISK_MESSAGE,
   SAVE_REFUSED_DELETED_ON_DISK_MESSAGE
 } from './editor-save-disk-precondition'
@@ -70,6 +71,10 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
   ): Promise<void> => {
     clearAutoSaveTimer(file.id)
     const queuedGeneration = saveGeneration.get(file.id) ?? 0
+    const overwriteConfirmed = isConfirmedDiskOverwrite(
+      store.getState().openFiles.find((openFile) => openFile.id === file.id),
+      trigger
+    )
 
     const previousSave = saveQueue.get(file.id) ?? Promise.resolve()
     const queuedSave = previousSave
@@ -135,7 +140,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
             liveFile.filePath,
             contentToSave,
             editorTabFileAccess(state, liveFile),
-            getSaveDiskPrecondition(liveFile, trigger)
+            getSaveDiskPrecondition(liveFile, trigger, overwriteConfirmed)
           )
         } catch (error) {
           // Why: the self-write stamp is only valid after a real write; clear on failure so it can't suppress a real update.

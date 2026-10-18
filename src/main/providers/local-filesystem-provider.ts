@@ -13,12 +13,11 @@ import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import { runBundledRipgrepTextSearch } from '../ripgrep/bundled-ripgrep-text-search'
 import { resolveBundledRipgrepWslRouting } from '../ripgrep/bundled-ripgrep-wsl-routing'
 import type { IFilesystemProvider } from './filesystem-provider-contract'
-import {
-  FILE_WRITE_OK,
-  type FileWriteDiskPrecondition,
-  type FileWriteResult
+import type {
+  FileWriteDiskPrecondition,
+  FileWriteResult
 } from '../../shared/file-write-disk-precondition'
-import { checkLocalDiskWritePrecondition } from '../ipc/filesystem/local-disk-write-precondition'
+import { writeLocalTextFileWithDiskPrecondition } from '../ipc/filesystem/local-disk-write-precondition'
 
 export type LocalFilesystemProviderOptions = {
   /** Read lazily so a call that fails earlier never touches the store. */
@@ -87,14 +86,7 @@ export function createLocalFilesystemProvider(
         throw error
       }
     }
-    const diskConflict = precondition
-      ? await checkLocalDiskWritePrecondition(authorizedPath, precondition)
-      : null
-    if (diskConflict) {
-      return { ok: false, diskConflict }
-    }
-    await writeFile(authorizedPath, content, 'utf-8')
-    return FILE_WRITE_OK
+    return writeLocalTextFileWithDiskPrecondition(authorizedPath, content, precondition)
   }
   return {
     readDir: async (dirPath, readOptions = {}) => {

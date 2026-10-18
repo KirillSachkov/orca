@@ -121,6 +121,20 @@ describe('local provider guarded write', () => {
     expect(await readFile(filePath, 'utf8')).toBe('edited')
   })
 
+  it('lets only one of two concurrent saves from the same baseline write', async () => {
+    const filePath = join(base, 'a.ts')
+    await writeFile(filePath, 'original')
+    const fromBaseline = { expectedSignature: getDiskBaselineSignature('original') }
+
+    const results = await Promise.all([
+      provider().writeFileWithDiskPrecondition(filePath, 'client one', fromBaseline),
+      provider().writeFileWithDiskPrecondition(filePath, 'client two', fromBaseline)
+    ])
+
+    expect(results).toEqual([{ ok: true }, { ok: false, diskConflict: 'changed' }])
+    expect(await readFile(filePath, 'utf8')).toBe('client one')
+  })
+
   it('does not resurrect a deleted file without allowMissing', async () => {
     const filePath = join(base, 'gone.ts')
 

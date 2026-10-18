@@ -11,6 +11,7 @@ import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor'
 import { ExternalFileChangeCompareDialog } from './ExternalFileChangeCompareDialog'
 import { getDiskBaselineSignature } from './diff-content-signature'
+import { isConfirmedFileNotFoundError } from '../../../../shared/file-write-disk-precondition'
 import { trackExternalChangeConflictAction } from './editor-external-change-telemetry'
 
 // Why: when an external process (usually an agent) rewrites a file while the
@@ -125,7 +126,21 @@ export function keepTabEditsOverExternalChange(file: OpenFile): void {
       current.setLastKnownDiskSignature(file.id, getDiskBaselineSignature(result.content))
       current.setDiskOverwriteIntent(file.id, null)
     })
-    .catch(fallBackToUnverifiedOverwrite)
+    .catch((error: unknown) => {
+      if (!isConfirmedFileNotFoundError(error)) {
+        fallBackToUnverifiedOverwrite()
+        return
+      }
+      if (!isStillVerifying()) {
+        return
+      }
+      // Why: a deleted file has nothing to overwrite; keep autosave's missing-file refusal so only an explicit save recreates it.
+      const current = useAppStore.getState()
+      current.setDiskOverwriteIntent(file.id, null)
+      if (file.mode === 'edit') {
+        current.setExternalMutation(file.id, 'deleted')
+      }
+    })
 }
 
 export function ExternalFileChangeBanner({

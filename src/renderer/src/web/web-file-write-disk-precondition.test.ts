@@ -5,11 +5,15 @@ import { createWebFileMutationMethods } from './web-file-mutation-methods'
 
 const precondition = { expectedSignature: getDiskBaselineSignature('original') }
 
-function methodsFor(capabilities: readonly string[], diskContent: string | null) {
+function methodsFor(
+  capabilities: readonly string[],
+  diskContent: string | null,
+  readError = "ENOENT: no such file or directory, stat '/hub/repo/readme.md'"
+) {
   const callRuntimeResult = vi.fn(async (method: string, _params: unknown): Promise<unknown> => {
     if (method === 'files.readPreview') {
       if (diskContent === null) {
-        throw new Error('ENOENT')
+        throw new Error(readError)
       }
       return { content: diskContent, isBinary: false }
     }
@@ -74,16 +78,29 @@ describe('paired web client save precondition', () => {
     expect(callRuntimeResult.mock.calls[1]?.[1]).not.toHaveProperty('diskPrecondition')
   })
 
-  it('does not autosave through an older server when the disk cannot be read', async () => {
+  it('reports a confirmed-missing file to an autosave through an older server', async () => {
     const { methods, calledMethods } = methodsFor([], null)
+
+    const result = await methods.writeFile({
+      filePath: '/hub/repo/readme.md',
+      content: 'edited',
+      diskPrecondition: precondition
+    })
+
+    expect(result).toEqual({ ok: false, diskConflict: 'missing' })
+    expect(calledMethods()).toEqual(['files.readPreview'])
+  })
+
+  it('fails an explicit save, without writing, when an older server read fails otherwise', async () => {
+    const { methods, calledMethods } = methodsFor([], null, 'Runtime request timed out')
 
     await expect(
       methods.writeFile({
         filePath: '/hub/repo/readme.md',
         content: 'edited',
-        diskPrecondition: precondition
+        diskPrecondition: { ...precondition, allowMissing: true }
       })
-    ).rejects.toThrow('ENOENT')
+    ).rejects.toThrow('timed out')
     expect(calledMethods()).toEqual(['files.readPreview'])
   })
 })
