@@ -1,6 +1,31 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { requestEditorFileSave, type EditorSaveFileTarget } from './editor-autosave'
+import {
+  SAVE_REFUSED_CHANGED_ON_DISK_MESSAGE,
+  SAVE_REFUSED_DELETED_ON_DISK_MESSAGE
+} from './editor-save-disk-precondition'
+
+function saveFailureNotice(error: unknown): string {
+  // Why: the save event bridge forwards only the message, so a disk refusal is recognized by it.
+  const message = error instanceof Error ? error.message : String(error)
+  if (message === SAVE_REFUSED_CHANGED_ON_DISK_MESSAGE) {
+    return translate(
+      'auto.components.editor.editor.save.refused.changedOnDisk',
+      'This file changed on disk. Review the change before saving.'
+    )
+  }
+  if (message === SAVE_REFUSED_DELETED_ON_DISK_MESSAGE) {
+    return translate(
+      'auto.components.editor.editor.save.refused.deletedOnDisk',
+      'This file was deleted on disk.'
+    )
+  }
+  return translate(
+    'auto.components.editor.editor.save.failure.notice.8c59ce5075',
+    'Failed to save the file. Please try again.'
+  )
+}
 
 export async function attemptEditorFileSave(target: EditorSaveFileTarget): Promise<boolean> {
   try {
@@ -9,12 +34,7 @@ export async function attemptEditorFileSave(target: EditorSaveFileTarget): Promi
   } catch (error) {
     // Why: shortcut handlers need a non-throwing result, while dependent actions must not treat a rejected write as success.
     console.error('[editor] file save failed', error)
-    toast.error(
-      translate(
-        'auto.components.editor.editor.save.failure.notice.8c59ce5075',
-        'Failed to save the file. Please try again.'
-      )
-    )
+    toast.error(saveFailureNotice(error))
     return false
   }
 }

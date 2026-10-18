@@ -9,20 +9,21 @@ import {
   getRemoteFileArgs,
   withSshMutationExpectation
 } from './runtime-file-routing'
-import { callRuntimeFileMutation } from './runtime-file-mutation-rpc'
+import {
+  callRuntimeFileMutation,
+  callRuntimeFileMutationWithCapabilities
+} from './runtime-file-mutation-rpc'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import { localAccess } from './runtime-file-read-client'
 import { REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES } from '../../../shared/remote-runtime-memory-limits'
 import {
+  FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
   parseFileWriteResult,
   type FileWriteDiskPrecondition,
   type FileWriteResult
 } from '../../../shared/file-write-disk-precondition'
-import {
-  checkDiskPreconditionFromClient,
-  runtimeHostEnforcesDiskPrecondition
-} from './runtime-file-write-disk-precondition'
+import { checkDiskPreconditionFromClient } from './runtime-file-write-disk-precondition'
 
 /** Refuses a save the host's frame cap would reject by dropping the whole connection. */
 function assertRemoteWriteFitsOneRequest(content: string): void {
@@ -80,28 +81,29 @@ export async function writeRuntimeFile(
     )
   }
   assertRemoteWriteFitsOneRequest(content)
-  let hostPrecondition = diskPrecondition
-  if (diskPrecondition && !(await runtimeHostEnforcesDiskPrecondition(remoteArgs.target))) {
-    hostPrecondition = undefined
-    const diskConflict = await checkDiskPreconditionFromClient(
-      { ...context, target: remoteArgs.target },
-      filePath,
-      diskPrecondition
-    )
-    if (diskConflict) {
-      return { ok: false, diskConflict }
-    }
-  }
+  const params = withSshMutationExpectation(context, {
+    worktree: remoteArgs.worktreeSelector,
+    relativePath: remoteArgs.relativePath,
+    content
+  })
   return parseFileWriteResult(
-    await callRuntimeFileMutation(
+    await callRuntimeFileMutationWithCapabilities<unknown>(
       remoteArgs.target,
       'files.write',
-      withSshMutationExpectation(context, {
-        worktree: remoteArgs.worktreeSelector,
-        relativePath: remoteArgs.relativePath,
-        content,
-        ...(hostPrecondition ? { diskPrecondition: hostPrecondition } : {})
-      }),
+      async (capabilities) => {
+        if (!diskPrecondition) {
+          return { params }
+        }
+        if (capabilities.includes(FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY)) {
+          return { params: { ...params, diskPrecondition } }
+        }
+        const diskConflict = await checkDiskPreconditionFromClient(
+          { ...context, target: remoteArgs.target },
+          filePath,
+          diskPrecondition
+        )
+        return diskConflict ? { result: { ok: false, diskConflict } } : { params }
+      },
       15_000
     )
   )

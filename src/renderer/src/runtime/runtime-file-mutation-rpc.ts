@@ -16,22 +16,32 @@ export type RuntimeFileImportSession = {
   assertCurrent: () => void
 }
 
-export async function assertRuntimeFileMutationCapability(
+async function getRuntimeFileMutationStatus(
   target: RuntimeFileMutationTarget,
   expectedEnvironmentPairingRevision: number | undefined
-): Promise<string> {
+): Promise<RuntimeStatus> {
   const status = await callRuntimeRpc<RuntimeStatus>(target, 'status.get', undefined, {
     timeoutMs: 15_000,
     expectedEnvironmentPairingRevision
   })
   assertFileMutationOwnershipCapability(status)
-  return status.runtimeId
+  return status
 }
 
-export async function callRuntimeFileMutation<TResult>(
+export async function assertRuntimeFileMutationCapability(
+  target: RuntimeFileMutationTarget,
+  expectedEnvironmentPairingRevision: number | undefined
+): Promise<string> {
+  return (await getRuntimeFileMutationStatus(target, expectedEnvironmentPairingRevision)).runtimeId
+}
+
+export type RuntimeFileMutationPlan<TResult> = { params: unknown } | { result: TResult }
+
+/** `plan` sees the ownership probe's capabilities, so a capability-gated field costs no extra status call. */
+export async function callRuntimeFileMutationWithCapabilities<TResult>(
   target: RuntimeFileMutationTarget,
   method: string,
-  params: unknown,
+  plan: (capabilities: readonly string[]) => Promise<RuntimeFileMutationPlan<TResult>>,
   timeoutMs: number,
   expectedEnvironmentPairingRevision?: number
 ): Promise<TResult> {
@@ -39,11 +49,31 @@ export async function callRuntimeFileMutation<TResult>(
     target.environmentId,
     expectedEnvironmentPairingRevision
   )
-  await assertRuntimeFileMutationCapability(target, requestRevision)
-  return callRuntimeRpc<TResult>(target, method, params, {
+  const status = await getRuntimeFileMutationStatus(target, requestRevision)
+  const planned = await plan(status.capabilities ?? [])
+  if ('result' in planned) {
+    return planned.result
+  }
+  return callRuntimeRpc<TResult>(target, method, planned.params, {
     timeoutMs,
     expectedEnvironmentPairingRevision: requestRevision
   })
+}
+
+export function callRuntimeFileMutation<TResult>(
+  target: RuntimeFileMutationTarget,
+  method: string,
+  params: unknown,
+  timeoutMs: number,
+  expectedEnvironmentPairingRevision?: number
+): Promise<TResult> {
+  return callRuntimeFileMutationWithCapabilities<TResult>(
+    target,
+    method,
+    async () => ({ params }),
+    timeoutMs,
+    expectedEnvironmentPairingRevision
+  )
 }
 
 export function createRuntimeImportSessionGuard(

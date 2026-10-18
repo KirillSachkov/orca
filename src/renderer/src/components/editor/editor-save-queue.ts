@@ -17,7 +17,7 @@ import {
   recordSelfWrite,
   SELF_WRITE_REMOTE_TTL_MS
 } from './editor-self-write-registry'
-import { getDiskBaselineSignature } from './diff-content-signature'
+import { getWrittenContentDiskSignature } from '../../../../shared/disk-baseline-signature'
 import { trackExternalChangeConflictAction } from './editor-external-change-telemetry'
 import { editorTabFileAccess } from '@/lib/local-file-access'
 import type { FileWriteResult } from '../../../../shared/file-write-disk-precondition'
@@ -110,7 +110,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
         if (
           trigger === 'autosave' &&
           hasPendingEditorChange(file.id) &&
-          liveFile.lastKnownDiskSignature === getDiskBaselineSignature(contentToSave)
+          liveFile.lastKnownDiskSignature === getWrittenContentDiskSignature(contentToSave)
         ) {
           return
         }
@@ -155,6 +155,11 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
               : SAVE_REFUSED_CHANGED_ON_DISK_MESSAGE
           )
         }
+        // Why: disk now holds contentToSave even if a quiesce superseded this save; a stale baseline would refuse the next one.
+        store
+          .getState()
+          .setLastKnownDiskSignature(file.id, getWrittenContentDiskSignature(contentToSave))
+        store.getState().setDiskOverwriteIntent(file.id, null)
 
         if ((saveGeneration.get(file.id) ?? 0) !== queuedGeneration) {
           return
@@ -169,8 +174,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
         if (!stillDirty) {
           nextState.clearEditorDraft(file.id)
         }
-        // Why: disk now holds contentToSave — rebaseline so our own save isn't flagged external; drop pending verification.
-        nextState.setLastKnownDiskSignature(file.id, getDiskBaselineSignature(contentToSave))
+        // Why: the save verified disk, so the restored-tab scan has nothing left to check.
         nextState.clearPendingDiskBaselineVerification(file.id)
         // Why: the write made disk match the buffer, so clear any now-stale changed-on-disk conflict.
         const savedFile = nextState.openFiles.find((openFile) => openFile.id === file.id)

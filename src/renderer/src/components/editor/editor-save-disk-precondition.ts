@@ -16,10 +16,11 @@ export const SAVE_REFUSED_DELETED_ON_DISK_MESSAGE = 'This file was deleted on di
  * banner's "overwrite" choice, and the banner already warned the newer disk content will be lost.
  */
 export function getSaveDiskPrecondition(
-  file: Pick<OpenFile, 'lastKnownDiskSignature' | 'externalMutation'>,
+  file: Pick<OpenFile, 'lastKnownDiskSignature' | 'externalMutation' | 'diskOverwriteIntent'>,
   trigger: 'autosave' | 'user'
 ): FileWriteDiskPrecondition | undefined {
-  if (!file.lastKnownDiskSignature) {
+  // Why: "Keep My Edits" already chose to overwrite; until its baseline read lands, a guard would refuse that choice.
+  if (!file.lastKnownDiskSignature || file.diskOverwriteIntent) {
     return undefined
   }
   if (trigger === 'user' && file.externalMutation === 'changed') {

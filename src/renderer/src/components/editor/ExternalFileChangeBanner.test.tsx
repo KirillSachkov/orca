@@ -46,14 +46,17 @@ describe('ExternalFileChangeBanner', () => {
   const setExternalMutation = vi.fn()
   const setEditorDraft = vi.fn()
   const setLastKnownDiskSignature = vi.fn()
+  const setDiskOverwriteIntent = vi.fn()
 
   function mockStoreState(editorDrafts: Record<string, string>, openFiles: OpenFile[] = [file]) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the banner reads only the stubbed members of the store.
     vi.mocked(useAppStore.getState).mockReturnValue({
       clearEditorDraft,
       markFileDirty,
       setExternalMutation,
       setEditorDraft,
       setLastKnownDiskSignature,
+      setDiskOverwriteIntent,
       editorDrafts,
       openFiles,
       settings: {}
@@ -203,7 +206,7 @@ describe('ExternalFileChangeBanner', () => {
 
   it('keep-my-edits advances the disk baseline so the dismissal survives restart', async () => {
     readRuntimeFileContentMock.mockResolvedValue({ content: 'agent content', isBinary: false })
-    mockStoreState({}, [{ ...file, externalMutation: undefined } as OpenFile])
+    mockStoreState({}, [{ ...file, externalMutation: undefined, diskOverwriteIntent: 'verifying' }])
 
     keepTabEditsOverExternalChange(file)
     await Promise.resolve()
@@ -213,6 +216,7 @@ describe('ExternalFileChangeBanner', () => {
       'file-1',
       getDiskBaselineSignature('agent content')
     )
+    expect(setDiskOverwriteIntent).toHaveBeenLastCalledWith('file-1', null)
   })
 
   it('keep-my-edits does not stamp a baseline over a newer conflict', async () => {

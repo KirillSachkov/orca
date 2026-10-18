@@ -93,10 +93,12 @@ export function isAutosaveSuspendedForFile(
     | 'pendingDiskBaselineVerification'
     | 'pendingLiveDiskVerification'
     | 'pendingOwnerMigration'
+    | 'diskOverwriteIntent'
   >
 ): boolean {
   return (
     file.externalMutation === 'changed' ||
+    file.diskOverwriteIntent === 'verifying' ||
     file.pendingDiskBaselineVerification === true ||
     file.pendingLiveDiskVerification === true ||
     file.pendingOwnerMigration === true

@@ -86,6 +86,7 @@ export type EditorFilesSlice = {
   markFileDirty: (fileId: string, dirty: boolean) => void
   setExternalMutation: (fileId: string, mutation: 'deleted' | 'renamed' | 'changed' | null) => void
   setLastKnownDiskSignature: (fileId: string, signature: string) => void
+  setDiskOverwriteIntent: (fileId: string, intent: 'verifying' | 'unverified' | null) => void
   clearPendingDiskBaselineVerification: (fileId: string) => void
   setPendingDiskBaselineVerification: (fileId: string, value: boolean) => void
   setPendingLiveDiskVerification: (fileId: string, value: boolean) => void

@@ -6,6 +6,21 @@ import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signatur
 import type { RuntimeStore } from '../../runtime/runtime-store-contract'
 import { createLocalFilesystemProvider } from '../../providers/local-filesystem-provider'
 import { checkLocalDiskWritePrecondition } from './local-disk-write-precondition'
+import type * as LocalRegularFileRead from './local-regular-file-read'
+
+const fileRead = vi.hoisted(() => ({ understateSizeBy: 0 }))
+vi.mock('./local-regular-file-read', async (importOriginal) => {
+  const actual = await importOriginal<typeof LocalRegularFileRead>()
+  return {
+    ...actual,
+    // Why: reports the size from before a concurrent append, as a stat racing the writer would.
+    openLocalRegularFile: async (filePath: string) => {
+      const opened = await actual.openLocalRegularFile(filePath)
+      opened.stats.size -= fileRead.understateSizeBy
+      return opened
+    }
+  }
+})
 
 let base: string
 
@@ -14,6 +29,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  fileRead.understateSizeBy = 0
   await rm(base, { recursive: true, force: true })
 })
 
@@ -48,6 +64,18 @@ describe('checkLocalDiskWritePrecondition', () => {
     await expect(
       checkLocalDiskWritePrecondition(filePath, {
         expectedSignature: getDiskBaselineSignature('short')
+      })
+    ).resolves.toBe('changed')
+  })
+
+  it('reports a file that grew past the baseline after its size check as changed', async () => {
+    const filePath = join(base, 'a.ts')
+    await writeFile(filePath, `ab${'x'.repeat(10)}`)
+    fileRead.understateSizeBy = 10
+
+    await expect(
+      checkLocalDiskWritePrecondition(filePath, {
+        expectedSignature: getDiskBaselineSignature('ab')
       })
     ).resolves.toBe('changed')
   })

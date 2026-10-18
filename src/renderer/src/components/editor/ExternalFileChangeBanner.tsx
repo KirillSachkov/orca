@@ -82,13 +82,24 @@ export function reloadTabContentFromDisk(
 export function keepTabEditsOverExternalChange(file: OpenFile): void {
   const state = useAppStore.getState()
   state.setExternalMutation(file.id, null)
+  // Why: autosave stays held until the baseline below lands, so it can neither be refused against
+  // the stale baseline nor write before the dismissal is durable.
+  state.setDiskOverwriteIntent(file.id, 'verifying')
+  const isStillVerifying = (): boolean =>
+    useAppStore.getState().openFiles.find((openFile) => openFile.id === file.id)
+      ?.diskOverwriteIntent === 'verifying'
+  // Why: an unreadable disk must not refuse every later save; the user already chose to overwrite.
+  const fallBackToUnverifiedOverwrite = (): void => {
+    if (isStillVerifying()) {
+      useAppStore.getState().setDiskOverwriteIntent(file.id, 'unverified')
+    }
+  }
   // Why: the dismissal must survive restart — without advancing the baseline
   // to the current disk content, the restored-tab conflict scan re-derives
   // the dismissed conflict from the stale signature on every launch.
-  // Best-effort: a failed read leaves the old signature, which can only
-  // re-surface the banner — never lose data.
   const target = getRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId)
   if (!target) {
+    fallBackToUnverifiedOverwrite()
     return
   }
   void readRuntimeFileContent({
@@ -102,18 +113,19 @@ export function keepTabEditsOverExternalChange(file: OpenFile): void {
   })
     .then((result) => {
       if (result.isBinary) {
+        fallBackToUnverifiedOverwrite()
+        return
+      }
+      // Why: only stamp while the dismissal still stands — a save or a newer
+      // conflict in the interim cleared the intent and owns the baseline.
+      if (!isStillVerifying()) {
         return
       }
       const current = useAppStore.getState()
-      const liveFile = current.openFiles.find((openFile) => openFile.id === file.id)
-      // Why: only stamp while the dismissal still stands — a save or a newer
-      // conflict marked in the interim owns the baseline.
-      if (!liveFile || liveFile.externalMutation === 'changed') {
-        return
-      }
       current.setLastKnownDiskSignature(file.id, getDiskBaselineSignature(result.content))
+      current.setDiskOverwriteIntent(file.id, null)
     })
-    .catch(() => undefined)
+    .catch(fallBackToUnverifiedOverwrite)
 }
 
 export function ExternalFileChangeBanner({

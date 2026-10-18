@@ -3,7 +3,14 @@ import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { SshConnectionState, SshMutationExpectation } from '../../../shared/ssh-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
-import { parseFileWriteResult } from '../../../shared/file-write-disk-precondition'
+import {
+  compareDiskWritePrecondition,
+  FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
+  parseFileWriteResult,
+  type FileWriteDiskConflict,
+  type FileWriteDiskPrecondition,
+  type FileWriteResult
+} from '../../../shared/file-write-disk-precondition'
 
 const SSH_OWNER_CHANGED_MESSAGE =
   "Couldn't verify the SSH connection. Reconnect the host and try again."
@@ -20,7 +27,8 @@ type ResolvedWebRuntimeFile = {
 
 type WebFileMutationSession = {
   resolveFilePath: (filePath: string) => Promise<ResolvedWebRuntimeFile>
-  assertMutationSupported: () => Promise<void>
+  /** Resolves to the host's advertised capabilities. */
+  assertMutationSupported: () => Promise<readonly string[]>
   callRuntimeResult: (method: string, params: unknown) => Promise<unknown>
   getSshState: (targetId: string) => Promise<SshConnectionState | null>
 }
@@ -65,6 +73,36 @@ function assertSameWorktree(
   }
 }
 
+/** Paired servers may predate the precondition; read through the same preview the editor loaded from, then compare. */
+async function checkWebDiskPreconditionFromClient(
+  session: WebFileMutationSession,
+  file: ResolvedWebRuntimeFile,
+  precondition: FileWriteDiskPrecondition
+): Promise<FileWriteDiskConflict | null> {
+  let preview: unknown
+  try {
+    preview = await session.callRuntimeResult('files.readPreview', {
+      worktree: toRuntimeWorktreeSelector(file.worktree.id),
+      relativePath: file.relativePath
+    })
+  } catch (error) {
+    // Why: an unverifiable autosave must not write; an explicit save keeps its old behavior.
+    if (precondition.allowMissing === true) {
+      return null
+    }
+    throw error
+  }
+  const text =
+    typeof preview === 'object' &&
+    preview !== null &&
+    !('isBinary' in preview && preview.isBinary === true) &&
+    'content' in preview &&
+    typeof preview.content === 'string'
+      ? preview.content
+      : undefined
+  return compareDiskWritePrecondition(precondition, text)
+}
+
 export function createWebFileMutationMethods(
   dependencies: WebFileMutationDependencies
 ): WebFileMutationMethod {
@@ -72,13 +110,19 @@ export function createWebFileMutationMethods(
     session: WebFileMutationSession,
     method: string,
     file: ResolvedWebRuntimeFile,
-    params: Record<string, unknown>
+    params: Record<string, unknown>,
+    // Why: lets a capability-gated field branch on the same status the support check fetched.
+    refine?: (capabilities: readonly string[]) => Promise<Record<string, unknown> | FileWriteResult>
   ): Promise<unknown> => {
-    await session.assertMutationSupported()
+    const capabilities = await session.assertMutationSupported()
     const provenance = await captureWebFileMutationProvenance(file, session.getSshState)
+    const refined = refine ? await refine(capabilities) : params
+    if ('ok' in refined) {
+      return refined
+    }
     return session.callRuntimeResult(method, {
       worktree: toRuntimeWorktreeSelector(file.worktree.id),
-      ...params,
+      ...refined,
       ...provenance
     })
   }
@@ -87,11 +131,21 @@ export function createWebFileMutationMethods(
     writeFile: async ({ filePath, content, diskPrecondition }) => {
       const session = dependencies.captureSession()
       const file = await session.resolveFilePath(filePath)
+      const params = { relativePath: file.relativePath, content }
       return parseFileWriteResult(
-        await callMutation(session, 'files.write', file, {
-          relativePath: file.relativePath,
-          content,
-          ...(diskPrecondition ? { diskPrecondition } : {})
+        await callMutation(session, 'files.write', file, params, async (capabilities) => {
+          if (!diskPrecondition) {
+            return params
+          }
+          if (capabilities.includes(FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY)) {
+            return { ...params, diskPrecondition }
+          }
+          const diskConflict = await checkWebDiskPreconditionFromClient(
+            session,
+            file,
+            diskPrecondition
+          )
+          return diskConflict ? { ok: false, diskConflict } : params
         })
       )
     },

@@ -117,6 +117,28 @@ describe('writeRuntimeFile disk precondition', () => {
     expect(writeCalls()[0]?.params).not.toHaveProperty('diskPrecondition')
   })
 
+  it("decides support from the write path's own status probe, one per save", async () => {
+    serveHost({ enforcesPrecondition: false, diskContent: 'original' })
+    runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: true }))
+
+    for (let save = 0; save < 3; save += 1) {
+      await writeRuntimeFile(
+        remoteContext,
+        '/remote/repo/file.ts',
+        'edited',
+        undefined,
+        precondition
+      )
+    }
+
+    const statusCalls = runtimeEnvironmentTransportCall.mock.calls.filter(
+      ([args]) => args.method === 'status.get'
+    )
+    // One ownership probe per save plus the read client's one-time compatibility probe.
+    expect(statusCalls).toHaveLength(4)
+    expect(writeCalls()).toHaveLength(3)
+  })
+
   it('refuses without writing when an older host holds newer disk content', async () => {
     serveHost({ enforcesPrecondition: false, diskContent: 'agent rewrite' })
 

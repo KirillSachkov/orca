@@ -18,6 +18,7 @@ export function createOpenFileMutations(
   | 'markFileDirty'
   | 'setExternalMutation'
   | 'setLastKnownDiskSignature'
+  | 'setDiskOverwriteIntent'
   | 'clearPendingDiskBaselineVerification'
   | 'setPendingDiskBaselineVerification'
   | 'setPendingLiveDiskVerification'
@@ -123,9 +124,24 @@ export function createOpenFileMutations(
         if (file.externalMutation === next) {
           return s
         }
+        // Why: a new conflict state (or its resolution) supersedes any earlier "Keep My Edits" intent.
         return {
           openFiles: s.openFiles.map((f) =>
-            f.id === fileId ? { ...f, externalMutation: next } : f
+            f.id === fileId ? { ...f, externalMutation: next, diskOverwriteIntent: undefined } : f
+          )
+        }
+      }),
+
+    setDiskOverwriteIntent: (fileId, intent) =>
+      set((s) => {
+        const file = s.openFiles.find((f) => f.id === fileId)
+        const next = intent ?? undefined
+        if (!file || file.diskOverwriteIntent === next) {
+          return s
+        }
+        return {
+          openFiles: s.openFiles.map((f) =>
+            f.id === fileId ? { ...f, diskOverwriteIntent: next } : f
           )
         }
       }),

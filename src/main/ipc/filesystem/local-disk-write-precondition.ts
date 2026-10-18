@@ -8,7 +8,11 @@ import {
   type FileWriteDiskPrecondition
 } from '../../../shared/file-write-disk-precondition'
 import { isENOENT } from '../filesystem-path-containment'
-import { openLocalRegularFile, readLocalFileBounded } from './local-regular-file-read'
+import {
+  FileTooLargeError,
+  openLocalRegularFile,
+  readLocalFileBounded
+} from './local-regular-file-read'
 
 /** Reads the file the writer is about to replace and reports why it no longer matches the baseline. */
 export async function checkLocalDiskWritePrecondition(
@@ -31,7 +35,16 @@ export async function checkLocalDiskWritePrecondition(
     if (expectedLength === null || !utf8ByteSizeCanDecodeToLength(stats.size, expectedLength)) {
       return 'changed'
     }
-    const buffer = await readLocalFileBounded(handle, expectedLength * 3, stats.size)
+    let buffer: Buffer
+    try {
+      buffer = await readLocalFileBounded(handle, expectedLength * 3, stats.size)
+    } catch (error) {
+      // Why: grown past what the baseline could decode from since the size check, so it changed.
+      if (error instanceof FileTooLargeError) {
+        return 'changed'
+      }
+      throw error
+    }
     return compareDiskWritePrecondition(precondition, buffer.toString('utf8'))
   } finally {
     await handle.close()

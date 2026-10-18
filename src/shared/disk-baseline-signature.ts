@@ -23,6 +23,13 @@ export function diskBaselineSignatureLength(signature: string): number | null {
   return Number.isSafeInteger(length) ? length : null
 }
 
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g
+
+/** Signature of what disk holds after a UTF-8 write of `content`, which stores each lone surrogate as U+FFFD. */
+export function getWrittenContentDiskSignature(content: string): string {
+  return getDiskBaselineSignature(content.replace(LONE_SURROGATE, '�'))
+}
+
 /** Why sound: every UTF-8-decoded unit, U+FFFD for a malformed run included, consumes 1–3 bytes. */
 export function utf8ByteSizeCanDecodeToLength(byteSize: number, utf16Length: number): boolean {
   return byteSize >= utf16Length && byteSize <= utf16Length * 3

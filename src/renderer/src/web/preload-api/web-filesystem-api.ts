@@ -177,7 +177,7 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
 
 export function captureWebFileMutationSession(): {
   resolveFilePath: (filePath: string) => Promise<Awaited<ReturnType<typeof resolveRuntimeFilePath>>>
-  assertMutationSupported: () => Promise<void>
+  assertMutationSupported: () => Promise<readonly string[]>
   callRuntimeResult: WebRuntimeResultCaller
   getSshState: (targetId: string) => Promise<SshConnectionState | null>
 } {
@@ -227,9 +227,9 @@ export function captureWebFileMutationSession(): {
         environment.id
       ),
     assertMutationSupported: async () => {
-      assertFileMutationOwnershipCapability(
-        await callBoundRuntimeResult<RuntimeStatus>('status.get', undefined, 15_000)
-      )
+      const status = await callBoundRuntimeResult<RuntimeStatus>('status.get', undefined, 15_000)
+      assertFileMutationOwnershipCapability(status)
+      return status.capabilities ?? []
     },
     callRuntimeResult: callBoundRuntimeResult,
     getSshState: async (targetId) =>

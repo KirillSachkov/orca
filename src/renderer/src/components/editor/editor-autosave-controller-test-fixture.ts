@@ -44,7 +44,8 @@ export function createFakeEditorDisk(initialFiles: Record<string, string> = {}):
           if (diskConflict) {
             return { ok: false, diskConflict }
           }
-          files.set(filePath, content)
+          // Why: a UTF-8 write stores each lone surrogate as U+FFFD, as main's does.
+          files.set(filePath, Buffer.from(content, 'utf8').toString('utf8'))
           return { ok: true }
         }
       ),
