@@ -43,7 +43,7 @@ function setup(state: Partial<AppState> = {}): ReturnType<typeof createTestStore
     activePendingCreationId: null,
     lastVisitedAtByWorktreeId: { [recent.id]: 200, [older.id]: 100 },
     ...state
-  } as Partial<AppState>)
+  })
   dispose = installActiveWorktreeRemovalSuccessor(store)
   return store
 }
@@ -167,8 +167,8 @@ describe('active worktree removal successor', () => {
       worktreesByRepo: { repo1: [active, recent, older, main] },
       activeWorktreeId: active.id,
       activeWorkspaceExecutionHostId: 'local',
-      activeView: 'settings'
-    } as Partial<AppState>)
+      activeView: 'tasks'
+    })
     await refreshWithout(store, [recent, older, main])
 
     expect(activateAndRevealWorktree).not.toHaveBeenCalled()
