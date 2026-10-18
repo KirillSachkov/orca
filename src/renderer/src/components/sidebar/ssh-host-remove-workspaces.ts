@@ -1,5 +1,6 @@
 import { getRepoExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
+import { workspaceOwnerHostId } from '@/lib/workspace-row-owner-host'
 import type { SshHostRemoveResolution } from './ssh-host-remove-resolution'
 
 export type ClearSshHostWorkspacesResult = {
@@ -32,6 +33,14 @@ export async function clearSshHostWorkspaces(
   // removed, so that target is the host each removal is confirmed against
   // (STA-4343) — a bare id could land on a local checkout at the same path.
   const hostId = toSshExecutionHostId(resolution.targetId)
+  // Why: the host's workspaces go one at a time, so a removal hand-off would land on the next one.
+  const activeId = store.activeWorktreeId
+  if (
+    activeId &&
+    (store.activeWorkspaceExecutionHostId ?? workspaceOwnerHostId(store, activeId)) === hostId
+  ) {
+    store.setActiveWorktree(null)
+  }
 
   for (const worktreeId of resolution.workspaceWorktreeIds) {
     // Why: sequential, not parallel — deletes on the same repo contend on git
