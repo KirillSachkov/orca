@@ -2,11 +2,15 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getRepoMapFromState } from '@/store/selectors'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
-import { isAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
 import {
-  worktreeHostMatchOptions,
-  worktreeMatchesHost
-} from '@/store/slices/worktrees/listing/worktree-host-ownership'
+  isAutomaticDeselection,
+  subscribeWorktreeDeselectionIntent,
+  type EnclosingWorktreeRemoval
+} from '@/store/active-worktree-deselection-intent'
+import {
+  findIndexedWorktreeOwnerForHost,
+  worktreeOwnerHostIds
+} from '@/lib/worktree-runtime-owner-index'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
 import { getDeleteStateForWorktreeHost } from '@/components/sidebar/worktree-delete-state-host-match'
@@ -30,20 +34,24 @@ type SuccessorState = Pick<
   | 'activePendingCreationId'
 >
 
-type RemovedActiveRow = { id: string; hostId: ExecutionHostId | null; repoId: string }
+type RemovedActiveRow = {
+  id: string
+  hostId: ExecutionHostId | null
+  repoId: string
+  ownerHostIds: ExecutionHostId[]
+}
 
 function findListedRow(
   state: Pick<AppState, 'worktreesByRepo' | 'repos'>,
   worktreeId: string,
   hostId: ExecutionHostId | null
-): Worktree | undefined {
+) {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   const rows = state.worktreesByRepo[repoId] ?? []
   if (!hostId) {
     return rows.find((row) => row.id === worktreeId)
   }
-  const matchOptions = worktreeHostMatchOptions(state, repoId, hostId)
-  return rows.find((row) => row.id === worktreeId && worktreeMatchesHost(row, hostId, matchOptions))
+  return findIndexedWorktreeOwnerForHost(state.worktreesByRepo, worktreeId, hostId)
 }
 
 // Why: a per-workspace-env's runtime-owned SSH target is torn down with its workspace, so a sibling
@@ -96,7 +104,14 @@ export function pickActiveWorktreeSuccessor(
 function listedActiveRow(state: SuccessorState): RemovedActiveRow | null {
   const id = state.activeWorktreeId
   const row = id ? findListedRow(state, id, state.activeWorkspaceExecutionHostId) : undefined
-  return row && id ? { id, hostId: state.activeWorkspaceExecutionHostId, repoId: row.repoId } : null
+  return row && id
+    ? {
+        id,
+        hostId: state.activeWorkspaceExecutionHostId,
+        repoId: row.repoId,
+        ownerHostIds: worktreeOwnerHostIds(row)
+      }
+    : null
 }
 
 function isSelectionEmptyTerminalView(state: SuccessorState): boolean {
@@ -116,8 +131,39 @@ function isSelectionEmptyTerminalView(state: SuccessorState): boolean {
  * row and hands off once the selection is empty and that row is gone.
  */
 export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () => void {
-  let witness: RemovedActiveRow | null = listedActiveRow(store.getState())
+  let witness: RemovedActiveRow | null = null
   let generation = 0
+  const scopes = new Set<EnclosingWorktreeRemoval>()
+  const matchesScope = (row: RemovedActiveRow, scope: EnclosingWorktreeRemoval): boolean =>
+    row.ownerHostIds.includes(scope.hostId) && (!scope.repoId || scope.repoId === row.repoId)
+  const isScoped = (row: RemovedActiveRow): boolean =>
+    [...scopes].some((scope) => matchesScope(row, scope))
+  const observe = (): RemovedActiveRow | null => {
+    const state = store.getState()
+    const row =
+      state.activeView === 'terminal' && state.activePendingCreationId === null
+        ? listedActiveRow(state)
+        : null
+    return row && !isScoped(row) ? row : null
+  }
+  witness = observe()
+  const unsubscribeIntent = subscribeWorktreeDeselectionIntent((scope, entering) => {
+    if (!scope || entering) {
+      if (scope) {
+        scopes.add(scope)
+      }
+      if (!scope || (witness && isScoped(witness))) {
+        witness = null
+        generation += 1
+      }
+    } else {
+      scopes.delete(scope)
+      const current = observe()
+      if (!witness && current && matchesScope(current, scope)) {
+        witness = current
+      }
+    }
+  })
   const unsubscribe = store.subscribe((next, prev) => {
     if (
       next.activeWorktreeId === prev.activeWorktreeId &&
@@ -128,8 +174,23 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
     ) {
       return
     }
+    const selectionChanged =
+      next.activeWorktreeId !== null &&
+      (next.activeWorktreeId !== prev.activeWorktreeId ||
+        next.activeWorkspaceExecutionHostId !== prev.activeWorkspaceExecutionHostId)
+    const navigated =
+      selectionChanged ||
+      next.activeView !== prev.activeView ||
+      next.activePendingCreationId !== prev.activePendingCreationId
+    if (navigated) {
+      witness = null
+      generation += 1
+    }
+    if (next.activeView !== 'terminal' || next.activePendingCreationId !== null) {
+      return
+    }
     if (next.activeWorktreeId !== null) {
-      const listed = listedActiveRow(next)
+      const listed = observe()
       // An unlisted pointer to the witness is a row dropped before its selection clears.
       if (listed || witness?.id !== next.activeWorktreeId) {
         witness = listed
@@ -140,16 +201,17 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
       return
     }
     const witnessListed = Boolean(findListedRow(next, witness.id, witness.hostId))
-    const userCleared = prev.activeWorktreeId !== null && witnessListed && !isAutomaticDeselection()
+    const rowDropped = Boolean(findListedRow(prev, witness.id, witness.hostId)) && !witnessListed
+    const userCleared = prev.activeWorktreeId !== null && !rowDropped && !isAutomaticDeselection()
     if (userCleared || !isSelectionEmptyTerminalView(next)) {
       witness = null
+      generation += 1
       return
     }
     if (witnessListed) {
       return
     }
     const removed = witness
-    witness = null
     const scheduled = ++generation
     // Why a microtask: let the removal's own synchronous follow-up writes land first, then re-check.
     queueMicrotask(() => {
@@ -161,6 +223,7 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
       ) {
         return
       }
+      witness = null
       const successor = pickActiveWorktreeSuccessor(state, removed)
       if (successor) {
         // Keep successor focus from replacing the removed row's spatial context.
@@ -173,6 +236,7 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
   })
   return () => {
     generation += 1
+    unsubscribeIntent()
     unsubscribe()
   }
 }

@@ -95,6 +95,24 @@ describe('active worktree removal successor', () => {
     })
   })
 
+  it('hands off after forgetting a paired row selected through its physical SSH alias', async () => {
+    const paired = { ...active, hostId: 'ssh:paired' as const, runtimeOwnerEnvironmentId: 'hub' }
+    const store = setup({
+      worktreesByRepo: { repo1: [paired, recent, main] },
+      activeWorkspaceExecutionHostId: 'ssh:paired'
+    })
+    const result = await store
+      .getState()
+      .removeWorktree({ id: paired.id, executionHostId: 'ssh:paired' }, false, {
+        mode: 'forget-local'
+      })
+    expect(result).toEqual({ ok: true })
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith(recent.id, {
+      revealInSidebar: false,
+      executionHostId: 'local'
+    })
+  })
+
   it('skips siblings still being deleted and falls back to the main workspace', async () => {
     const deleting = {
       isDeleting: true,
