@@ -38,13 +38,25 @@ export const FILE_MUTATION_METHODS = [
     name: 'files.write',
     permission: 'workspace',
     params: FileWrite,
-    handler: async (params, { runtime }) =>
-      runtime.writeFileExplorerFile(
+    handler: async (params, { runtime }) => {
+      if (!params.diskPrecondition) {
+        return runtime.writeFileExplorerFile(
+          params.worktree,
+          params.relativePath,
+          params.content,
+          ...sshMutationArguments(params)
+        )
+      }
+      return runtime.writeFileExplorerFile(
         params.worktree,
         params.relativePath,
         params.content,
-        ...sshMutationArguments(params)
+        params.expectedSshConnectionGeneration,
+        params.expectedSshTargetId,
+        params.expectedExecutionHostId,
+        params.diskPrecondition
       )
+    }
   }),
   defineMethod({
     name: 'files.writeBase64',

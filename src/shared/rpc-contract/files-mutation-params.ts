@@ -24,7 +24,13 @@ export const FileMutationOpen = FileOpen.extend({
 export const FileWrite = FileMutationOpen.extend({
   content: z
     .unknown()
-    .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
+    .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' }),
+  diskPrecondition: z
+    .object({
+      expectedSignature: z.string().min(1).max(64),
+      allowMissing: z.boolean().optional()
+    })
+    .optional()
 })
 
 export const FileWriteBase64 = FileMutationOpen.extend({

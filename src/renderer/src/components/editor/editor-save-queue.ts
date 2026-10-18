@@ -20,6 +20,13 @@ import {
 import { getDiskBaselineSignature } from './diff-content-signature'
 import { trackExternalChangeConflictAction } from './editor-external-change-telemetry'
 import { editorTabFileAccess } from '@/lib/local-file-access'
+import type { FileWriteResult } from '../../../../shared/file-write-disk-precondition'
+import {
+  applySaveDiskConflict,
+  getSaveDiskPrecondition,
+  SAVE_REFUSED_CHANGED_ON_DISK_MESSAGE,
+  SAVE_REFUSED_DELETED_ON_DISK_MESSAGE
+} from './editor-save-disk-precondition'
 
 export type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
 
@@ -93,7 +100,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
           throw new Error('This file is still restoring its workspace owner. Try saving again.')
         }
 
-        // Why: only autosave is blocked while suspended; explicit user saves proceed (the banner warned).
+        // Why: only autosave is blocked while suspended; explicit saves proceed, guarded by the disk precondition.
         if (trigger === 'autosave' && isAutosaveSuspendedForFile(liveFile)) {
           return
         }
@@ -121,17 +128,32 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
             ? SELF_WRITE_REMOTE_TTL_MS
             : undefined
         )
+        let writeResult: FileWriteResult
         try {
-          await writeRuntimeFile(
+          writeResult = await writeRuntimeFile(
             fileContext,
             liveFile.filePath,
             contentToSave,
-            editorTabFileAccess(state, liveFile)
+            editorTabFileAccess(state, liveFile),
+            getSaveDiskPrecondition(liveFile, trigger)
           )
         } catch (error) {
           // Why: the self-write stamp is only valid after a real write; clear on failure so it can't suppress a real update.
           clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
           throw error
+        }
+        if (!writeResult.ok) {
+          clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
+          // Why: the file stays dirty; the user resolves the conflict through the banner or tombstone.
+          applySaveDiskConflict(store.getState(), file.id, writeResult.diskConflict, connectionId)
+          if (trigger === 'autosave') {
+            return
+          }
+          throw new Error(
+            writeResult.diskConflict === 'missing'
+              ? SAVE_REFUSED_DELETED_ON_DISK_MESSAGE
+              : SAVE_REFUSED_CHANGED_ON_DISK_MESSAGE
+          )
         }
 
         if ((saveGeneration.get(file.id) ?? 0) !== queuedGeneration) {

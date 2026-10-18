@@ -6,6 +6,11 @@ import { createStore, type StoreApi } from 'zustand/vanilla'
 import { createEditorSlice } from '@/store/slices/editor'
 import type { AppState } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import {
+  compareDiskWritePrecondition,
+  type FileWriteDiskPrecondition,
+  type FileWriteResult
+} from '../../../../shared/file-write-disk-precondition'
 
 export type FakeEditorDisk = {
   files: Map<string, string>
@@ -22,9 +27,27 @@ export function createFakeEditorDisk(initialFiles: Record<string, string> = {}):
   return {
     files,
     fs: {
-      writeFile: vi.fn(async ({ filePath, content }: { filePath: string; content: string }) => {
-        files.set(filePath, content)
-      }),
+      writeFile: vi.fn(
+        async ({
+          filePath,
+          content,
+          diskPrecondition
+        }: {
+          filePath: string
+          content: string
+          diskPrecondition?: FileWriteDiskPrecondition
+        }): Promise<FileWriteResult> => {
+          // Why: mirrors main's writer, which refuses when disk drifted from the tab's baseline.
+          const diskConflict = diskPrecondition
+            ? compareDiskWritePrecondition(diskPrecondition, files.get(filePath) ?? null)
+            : null
+          if (diskConflict) {
+            return { ok: false, diskConflict }
+          }
+          files.set(filePath, content)
+          return { ok: true }
+        }
+      ),
       deletePath: vi.fn(async ({ targetPath }: { targetPath: string }) => {
         files.delete(targetPath)
       }),

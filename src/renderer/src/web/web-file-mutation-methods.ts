@@ -3,6 +3,7 @@ import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { SshConnectionState, SshMutationExpectation } from '../../../shared/ssh-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
+import { parseFileWriteResult } from '../../../shared/file-write-disk-precondition'
 
 const SSH_OWNER_CHANGED_MESSAGE =
   "Couldn't verify the SSH connection. Reconnect the host and try again."
@@ -72,10 +73,10 @@ export function createWebFileMutationMethods(
     method: string,
     file: ResolvedWebRuntimeFile,
     params: Record<string, unknown>
-  ): Promise<void> => {
+  ): Promise<unknown> => {
     await session.assertMutationSupported()
     const provenance = await captureWebFileMutationProvenance(file, session.getSshState)
-    await session.callRuntimeResult(method, {
+    return session.callRuntimeResult(method, {
       worktree: toRuntimeWorktreeSelector(file.worktree.id),
       ...params,
       ...provenance
@@ -83,10 +84,16 @@ export function createWebFileMutationMethods(
   }
 
   return {
-    writeFile: async ({ filePath, content }) => {
+    writeFile: async ({ filePath, content, diskPrecondition }) => {
       const session = dependencies.captureSession()
       const file = await session.resolveFilePath(filePath)
-      await callMutation(session, 'files.write', file, { relativePath: file.relativePath, content })
+      return parseFileWriteResult(
+        await callMutation(session, 'files.write', file, {
+          relativePath: file.relativePath,
+          content,
+          ...(diskPrecondition ? { diskPrecondition } : {})
+        })
+      )
     },
     createFile: async ({ filePath }) => {
       const session = dependencies.captureSession()
