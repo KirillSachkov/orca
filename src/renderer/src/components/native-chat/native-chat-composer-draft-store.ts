@@ -127,7 +127,9 @@ function isEmptyDraft(draft: NativeChatComposerDraft): boolean {
   return draft.text === '' && draft.images.length === 0
 }
 
-export function readNativeChatComposerDraft(scopeKey: string): NativeChatComposerDraft {
+export function readNativeChatComposerDraft(
+  scopeKey: string
+): NativeChatComposerDraft & Pick<StoredNativeChatComposerDraft, 'owner'> {
   return records.get(scopeKey) ?? EMPTY_DRAFT
 }
 

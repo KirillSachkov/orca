@@ -5,6 +5,7 @@ import {
   readNativeChatComposerDraft,
   subscribeToNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
+import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session-attachments'
 import { useRestoredNativeChatComposerDraftImageCheck } from './native-chat-composer-draft-image-check'
 import {
   nativeChatImageRow,
@@ -27,7 +28,10 @@ export function useNativeChatComposerImageChips(attachmentScopeKey: string): {
   )
   // Why: a restored paste shows only once main confirms it is still kept, so until the restore
   // check is done it waits like a chip still saving, instead of flashing before a placeholder.
-  const restoring = useRestoredNativeChatComposerDraftImageCheck(attachmentScopeKey, subscribe)
+  const { restoring, localStoreImages } = useRestoredNativeChatComposerDraftImageCheck(
+    attachmentScopeKey,
+    subscribe
+  )
   // Chips still on their way live outside the composer, so one a prompt card unmounted comes back
   // still pending and settles into the draft whichever composer is showing.
   const pending = useNativeChatPendingAttachments(attachmentScopeKey)
@@ -39,10 +43,16 @@ export function useNativeChatComposerImageChips(attachmentScopeKey: string): {
     }
     return nativeChatImageRow(
       settled.map((image) =>
-        restoring && isKeptLocalPaste(image) ? { ...image, pending: true } : withPreview(image)
+        restoring &&
+        (isKeptLocalPaste(image) ||
+          (localStoreImages &&
+            !image.connectionId &&
+            isAgentSessionAttachmentStorePath(image.path)))
+          ? { ...image, pending: true }
+          : withPreview(image)
       ),
       pending.map(withPreview)
     )
-  }, [pending, previews, restoring, settled])
+  }, [localStoreImages, pending, previews, restoring, settled])
   return { imageAttachments, ...previewActions }
 }

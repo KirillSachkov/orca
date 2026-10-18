@@ -11,6 +11,7 @@
 
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
 import type Database from '../../sqlite/sync-database'
 import {
   finishUploadSweep,
@@ -52,7 +53,7 @@ export async function sweepAgentSessionAttachments(
       continue
     }
     const uploadDir = join(store.rootDir, uploadId)
-    const stored = (await listEntries(uploadDir)).some(
+    const stored = (await readdir(uploadDir)).some(
       (entry) => entry !== AGENT_SESSION_ATTACHMENT_PART_FILE
     )
     const ageMs = now - (await modifiedAt(uploadDir))
@@ -91,20 +92,15 @@ function withDatabase<T>(
   return db ? run(db) : undefined
 }
 
-async function listEntries(dir: string): Promise<string[]> {
-  try {
-    return await readdir(dir)
-  } catch {
-    return []
-  }
-}
-
 async function listDirectories(dir: string): Promise<string[]> {
   try {
     const entries = await readdir(dir, { withFileTypes: true })
     return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
-  } catch {
-    return []
+  } catch (error) {
+    if (isDefinitiveAbsence(error)) {
+      return []
+    }
+    throw error
   }
 }
 

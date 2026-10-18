@@ -15,6 +15,11 @@ import { readNativeChatDraftCache } from './native-chat-draft-cache'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
 import { imageReferenceToken } from '../../../../shared/native-chat-image-reference'
 
+import { useAppStore } from '@/store'
+import * as draftStore from './native-chat-composer-draft-store'
+import * as draftStorage from './native-chat-composer-draft-storage'
+import { nativeChatImagesHoldSend } from './native-chat-image-reattach'
+
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
@@ -146,6 +151,46 @@ describe('useNativeChatComposerAttachments', () => {
     expect(clearNativeChatAttachmentCacheForTests).toBe(
       draftCache.clearNativeChatAttachmentCacheForTests
     )
+  })
+
+  it('checks a restored store image when its owner becomes local, holding Send and preserving a newer edit', async () => {
+    const scope = 'agent-session:restored'
+    const image = { id: 'old', path: '/state/agent-session-attachments/upload/shot.png' }
+    const storage = draftStorage.createMemoryNativeChatComposerDraftStorage()
+    storage.drafts.set(scope, { text: '', images: [image, { ...image, id: 'edit' }], savedAt: 1 })
+    draftStorage.setNativeChatComposerDraftStorageForTests(storage)
+    let owner: draftStorage.NativeChatComposerDraftOwner | undefined
+    draftStore.setNativeChatComposerDraftOwnerResolver(() => owner)
+    const exists = Promise.withResolvers<boolean>()
+    const pathExists = vi.fn(() => exists.promise)
+    const originalApi = window.api
+    Object.assign(window, { api: { fs: { pathExists } } })
+    try {
+      await draftStore.hydrateNativeChatComposerDrafts()
+      const probe = await renderProbe(scope, true)
+      owner = { workspaceId: 'wt', executionHostId: 'runtime:remote' }
+      act(() => useAppStore.setState({}))
+      expect(pathExists).not.toHaveBeenCalled()
+      owner = { workspaceId: 'wt', executionHostId: 'local' }
+      act(() => useAppStore.setState({}))
+      expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(true)
+      expect(pathExists).toHaveBeenCalledWith({
+        filePath: image.path,
+        access: { kind: 'chat-image' }
+      })
+      const newer = { id: 'edit', path: '/repo/new.png' }
+      await act(async () => {
+        draftStore.updateNativeChatComposerDraft(scope, { images: [image, newer] }, 'immediate')
+        exists.resolve(false)
+      })
+      expect(probe.latest().imageAttachments).toMatchObject([
+        { id: 'old', path: '', unavailableName: 'shot.png' },
+        newer
+      ])
+      act(() => probe.root.unmount())
+    } finally {
+      Object.assign(window, { api: originalApi })
+    }
   })
 
   it('holds attached images as chips (deferred to submit) and restores them on remount', async () => {
