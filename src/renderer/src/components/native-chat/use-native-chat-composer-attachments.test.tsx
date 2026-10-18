@@ -158,15 +158,28 @@ describe('useNativeChatComposerAttachments', () => {
     const image = { id: 'old', path: '/state/agent-session-attachments/upload/shot.png' }
     const storage = draftStorage.createMemoryNativeChatComposerDraftStorage()
     storage.drafts.set(scope, { text: '', images: [image, { ...image, id: 'edit' }], savedAt: 1 })
+    const paste = { id: 'paste', path: '/state/native-chat-pastes/orca-paste-1-a.png' }
+    storage.drafts.set('pty-1', { text: '', images: [image, paste], savedAt: 1 })
     draftStorage.setNativeChatComposerDraftStorageForTests(storage)
     let owner: draftStorage.NativeChatComposerDraftOwner | undefined
     draftStore.setNativeChatComposerDraftOwnerResolver(() => owner)
     const exists = Promise.withResolvers<boolean>()
     const pathExists = vi.fn(() => exists.promise)
     const originalApi = window.api
-    Object.assign(window, { api: { fs: { pathExists } } })
+    Object.assign(window, {
+      api: {
+        fs: { pathExists },
+        ui: {
+          restoreNativeChatPastes: async () => [{ path: paste.path, kept: true, exists: true }]
+        }
+      }
+    })
     try {
       await draftStore.hydrateNativeChatComposerDrafts()
+      const terminal = await renderProbe('pty-1')
+      act(() => terminal.latest().attachResolvedPaths(['/repo/fresh.png']))
+      expect(nativeChatImagesHoldSend(terminal.latest().imageAttachments)).toBe(false)
+      act(() => terminal.root.unmount())
       const probe = await renderProbe(scope, true)
       owner = { workspaceId: 'wt', executionHostId: 'runtime:remote' }
       act(() => useAppStore.setState({}))
@@ -174,10 +187,11 @@ describe('useNativeChatComposerAttachments', () => {
       owner = { workspaceId: 'wt', executionHostId: 'local' }
       act(() => useAppStore.setState({}))
       expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(true)
-      expect(pathExists).toHaveBeenCalledWith({
-        filePath: image.path,
-        access: { kind: 'chat-image' }
-      })
+      owner = { workspaceId: 'wt', executionHostId: 'runtime:remote' }
+      await act(async () => useAppStore.setState({}))
+      expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(false)
+      owner = { workspaceId: 'wt', executionHostId: 'local' }
+      act(() => useAppStore.setState({}))
       const newer = { id: 'edit', path: '/repo/new.png' }
       await act(async () => {
         draftStore.updateNativeChatComposerDraft(scope, { images: [image, newer] }, 'immediate')
