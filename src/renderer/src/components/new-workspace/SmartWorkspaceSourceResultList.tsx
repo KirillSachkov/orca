@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { getSmartWorkspaceEmptyHint } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import { getRowItemClassName, RowIcon, RowLabel } from './smart-workspace-source-row-content'
-import type { RowEntry } from './smart-workspace-name-field-model'
+import { LINEAR_SETTINGS_COMMAND_VALUE, type RowEntry } from './smart-workspace-name-field-model'
 import type { WorkItemSourceSearch } from './use-work-item-source-search'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 
@@ -125,26 +125,35 @@ export function SmartWorkspaceSourceResultList({
               <div key={index} className="h-8 animate-pulse rounded bg-muted/40" />
             ))}
           </div>
+        ) : searchResultRows.length === 0 &&
+          visibleLinearReadError &&
+          onOpenLinearSettings &&
+          !jiraSource.intent ? (
+          // Why: a list row is reachable with the arrow keys and compact enough for the capped popover.
+          <CommandGroup className="p-1">
+            <CommandItem
+              selection="palette"
+              value={LINEAR_SETTINGS_COMMAND_VALUE}
+              onSelect={() => onOpenLinearSettings(linearSourceContext)}
+              className="text-xs"
+            >
+              <span role="status" aria-live="polite">
+                <span className="text-destructive">{visibleLinearReadError}</span>{' '}
+                <span className="text-primary underline underline-offset-2">
+                  {translate(
+                    'auto.components.new.workspace.SmartWorkspaceNameField.openSettings',
+                    'Settings'
+                  )}
+                </span>
+              </span>
+            </CommandItem>
+          </CommandGroup>
         ) : searchResultRows.length === 0 && (visibleLinearReadError || !typedTextActionRow) ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
             {jiraSource.intent ? null : visibleLinearReadError ? (
-              <div role="status" aria-live="polite" className="space-y-2">
-                <p className="text-destructive">{visibleLinearReadError}</p>
-                {onOpenLinearSettings ? (
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="xs"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => onOpenLinearSettings(linearSourceContext)}
-                  >
-                    {translate(
-                      'auto.components.new.workspace.SmartWorkspaceNameField.openSettings',
-                      'Settings'
-                    )}
-                  </Button>
-                ) : null}
-              </div>
+              <p role="status" aria-live="polite" className="text-destructive">
+                {visibleLinearReadError}
+              </p>
             ) : mode === 'linear' && linearStatusChecked && !linearStatus.connected ? (
               translate(
                 'auto.components.new.workspace.SmartWorkspaceNameField.3e8bb1176a',

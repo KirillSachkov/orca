@@ -105,7 +105,7 @@ describe('composer Linear read errors', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Linear tab' }))
 
     await waitFor(() => expect(screen.getByRole('status').textContent).toContain(message))
-    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    fireEvent.click(screen.getByRole('option', { name: /Settings/ }))
     expect(onOpenLinearSettings).toHaveBeenCalledWith(
       expect.objectContaining({ provider: 'linear', hostId: 'runtime:env-1' })
     )
