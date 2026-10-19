@@ -5,6 +5,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { credentialDecryptionMessage } from '../../../../shared/integration-credential-errors'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { LinearConnectionStatus } from '../../../../shared/linear/workspace-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { Command } from '@/components/ui/command'
 import {
   referenceLinearIssue,
@@ -13,20 +15,27 @@ import {
 import { SmartWorkspaceSourceResultList } from './SmartWorkspaceSourceResultList'
 import { useWorkItemSourceSearch } from './use-work-item-source-search'
 
-const mocks = vi.hoisted(() => ({
-  state: {
-    checkLinearConnection: vi.fn(),
-    // Host-wide status carries no error: the composer must show the read's own failure.
-    linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
-    linearStatusChecked: true,
-    settings: null,
-    preflightStatus: null,
-    preflightStatusChecked: true,
-    preflightStatusContextKey: 'test',
-    refreshPreflightStatus: vi.fn(),
-    searchLinearIssues: vi.fn<(query: string) => Promise<LinearIssue[]>>()
+const mocks = vi.hoisted(() => {
+  // Host-wide status carries no error: the composer must show the read's own failure.
+  const linearStatus: LinearConnectionStatus = {
+    connected: true,
+    viewer: null,
+    selectedWorkspaceId: 'workspace-1'
   }
-}))
+  return {
+    state: {
+      checkLinearConnection: vi.fn(),
+      linearStatus,
+      linearStatusChecked: true,
+      settings: null,
+      preflightStatus: null,
+      preflightStatusChecked: true,
+      preflightStatusContextKey: 'test',
+      refreshPreflightStatus: vi.fn(),
+      searchLinearIssues: vi.fn<(query: string) => Promise<LinearIssue[]>>()
+    }
+  }
+})
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state)
 }))
@@ -43,7 +52,7 @@ vi.mock('../use-jira-project-inventory', () => ({
   useJiraProjectInventory: () => ({ projects: [], connected: true, error: null, loading: false })
 }))
 
-const repo = { ...referenceRepo, executionHostId: 'runtime:env-1' }
+const repo: Repo = { ...referenceRepo, executionHostId: 'runtime:env-1' }
 // Stable identity: search effects depend on the repos array.
 const repos = [repo]
 
@@ -100,6 +109,13 @@ describe('composer Linear read errors', () => {
     expect(onOpenLinearSettings).toHaveBeenCalledWith(
       expect.objectContaining({ provider: 'linear', hostId: 'runtime:env-1' })
     )
+
+    // The status refresh after the failure re-runs the same read; the error must stay up.
+    mocks.state.linearStatus = { ...mocks.state.linearStatus, credentialError: message }
+    rerender(<LinearPicker value="broken" onOpenLinearSettings={onOpenLinearSettings} />)
+    expect(screen.getByText(message)).toBeTruthy()
+    await waitFor(() => expect(mocks.state.searchLinearIssues).toHaveBeenCalledTimes(2))
+    expect(screen.getByText(message)).toBeTruthy()
 
     rerender(<LinearPicker value="launch" onOpenLinearSettings={onOpenLinearSettings} />)
     await waitFor(() => expect(screen.getByText(/Task/)).toBeTruthy())

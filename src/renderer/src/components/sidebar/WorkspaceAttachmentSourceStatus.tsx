@@ -19,11 +19,7 @@ export function WorkspaceAttachmentSourceStatus({
 }): React.JSX.Element | null {
   const linearReadError =
     controller.mode === 'linear' || controller.mode === 'smart' ? controller.linearReadError : null
-  // Why: an empty result list already shows the Linear read error.
-  if (!error && linearReadError && controller.searchResultRows.length === 0) {
-    return null
-  }
-  let message =
+  let message: string | null =
     error ??
     linearReadError ??
     translate('workspace.links.inlineSearchHint', 'Select a result to attach it.')
@@ -56,6 +52,10 @@ export function WorkspaceAttachmentSourceStatus({
         'Connect Linear in Settings to link this issue.'
       )
       retry = onRetry
+    } else if (linearReadError) {
+      // Why: Retry re-reads after the user approves Keychain access.
+      message = linearReadError
+      retry = onRetry
     } else if (controller.unresolvedLinearUrlIntent || controller.linearLoading) {
       message = translate('workspace.links.loadingLinear', 'Loading Linear issue…')
     } else {
@@ -66,13 +66,20 @@ export function WorkspaceAttachmentSourceStatus({
       retry = onRetry
     }
   }
+  // Why: an empty result list already shows the Linear read error; keep only this row's action.
+  if (!error && message === linearReadError && controller.searchResultRows.length === 0) {
+    message = null
+  }
+  if (!message && !retry) {
+    return null
+  }
   return (
     <div
       role="status"
       aria-live="polite"
       className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"
     >
-      <span>{message}</span>
+      {message ? <span>{message}</span> : null}
       {retry ? (
         <Button
           type="button"

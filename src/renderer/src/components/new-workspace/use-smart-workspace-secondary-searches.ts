@@ -79,6 +79,7 @@ export function useSmartWorkspaceSecondarySearches({
     listLinearIssues,
     searchLinearIssues
   }
+  const failedLinearReadRef = useRef<readonly unknown[] | null>(null)
   const linearConnected = linearStatus.connected === true
   const linearScopeSignature = linearWorkspaceScopeSignature(linearStatus)
   const branchSearchRequest = useMemo(
@@ -155,17 +156,27 @@ export function useSmartWorkspaceSecondarySearches({
   ])
 
   useEffect(() => {
-    setLinearReadError(null)
-    if (disabled || !shouldQueryLinear || !linearConnected) {
+    const readKey = [linearQuery, linearSourceContext, linearWorkspaceIdOverride] as const
+    // Why: the status refresh after a failure re-runs this same read; don't blink its error.
+    const rereadOfFailure =
+      failedLinearReadRef.current?.every((part, index) => part === readKey[index]) === true
+    const canQuery = !disabled && shouldQueryLinear && linearConnected
+    if (!rereadOfFailure || !canQuery) {
+      failedLinearReadRef.current = null
+      setLinearReadError(null)
+    }
+    if (!canQuery) {
       setLinearIssues([])
       setLinearLoading(false)
       setSettledLinearUrlQuery(null)
       return
     }
     let stale = false
-    setLinearLoading(true)
     const trimmed = linearQuery.trim()
-    setSettledLinearUrlQuery(null)
+    if (!rereadOfFailure) {
+      setLinearLoading(true)
+      setSettledLinearUrlQuery(null)
+    }
     // Why: empty-query list must not briefly paint the previous non-empty result set.
     if (trimmed === '') {
       setLinearIssues([])
@@ -206,6 +217,8 @@ export function useSmartWorkspaceSecondarySearches({
     void request
       .then((issues) => {
         if (!stale) {
+          failedLinearReadRef.current = null
+          setLinearReadError(null)
           setLinearIssues(issues)
         }
       })
@@ -213,9 +226,9 @@ export function useSmartWorkspaceSecondarySearches({
         if (!stale) {
           setLinearIssues([])
           // Why: the read reports its own host's failure; host-wide status may describe another host.
-          if (isIntegrationCredentialDecryptionError(error)) {
-            setLinearReadError(credentialDecryptionMessage('Linear'))
-          }
+          const credentialError = isIntegrationCredentialDecryptionError(error)
+          failedLinearReadRef.current = credentialError ? readKey : null
+          setLinearReadError(credentialError ? credentialDecryptionMessage('Linear') : null)
         }
       })
       .finally(() => {
