@@ -23,7 +23,8 @@ import { translate } from '@/i18n/i18n'
 
 export type AgentPermissionsRenderer = (
   mode: AgentPermissionMode,
-  onChange: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void
+  onChange: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void,
+  autoSupported?: boolean
 ) => React.ReactNode
 
 export function AgentLaunchSettingsCatalog({
@@ -33,6 +34,7 @@ export function AgentLaunchSettingsCatalog({
   hostName,
   renderPermissions,
   refreshSettings,
+  autoSupported = true,
   local
 }: {
   settings: AgentLaunchSettings
@@ -41,6 +43,7 @@ export function AgentLaunchSettingsCatalog({
   hostName: string | null
   renderPermissions: AgentPermissionsRenderer
   refreshSettings?: () => void
+  autoSupported?: boolean
   local?: {
     settings: GlobalSettings
     updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
@@ -125,7 +128,11 @@ export function AgentLaunchSettingsCatalog({
         )}
         onSetDefault={(agent) => save({ type: 'default', agent })}
       />
-      {renderPermissions(settings.permissionMode, (mode) => save({ type: 'permissions', mode }))}
+      {renderPermissions(
+        settings.autoPermissionMode ? 'auto' : settings.permissionMode,
+        (mode) => save({ type: 'permissions', mode }),
+        autoSupported
+      )}
       <AgentDetectionCatalog
         detectedAgents={detectedAgents}
         undetectedAgents={undetectedAgents}

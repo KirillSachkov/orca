@@ -1,6 +1,9 @@
 import type { GlobalSettings } from './global-settings-types'
-import { resolvedTuiAgentArgsBypassPermissions } from './tui-agent-launch-defaults'
-import { YOLO_TUI_AGENT_ARGS } from './tui-agent-permissions'
+import {
+  resolvedTuiAgentArgsBypassPermissions,
+  resolveTuiAgentLaunchArgs
+} from './tui-agent-launch-defaults'
+import { AUTO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ARGS } from './tui-agent-permissions'
 import type { TuiAgent } from './tui-agent'
 
 /** A chat's own permission choice. Saved in chat records and settings: never rename a value. */
@@ -131,8 +134,13 @@ export function loadedChatPermissionSetting(
   if (saved !== undefined) {
     return isAgentChatPermissionMode(saved) ? saved : 'ask'
   }
-  // What chats ran before they had modes: Claude's and Codex's own arguments, not the all-agent
-  // Yolo/Manual summary, which shows custom arguments on any agent as Yolo even after Manual.
+  const automatic = (agent: 'claude' | 'codex'): boolean =>
+    resolveTuiAgentLaunchArgs(agent, terminal.agentDefaultArgs).trim() ===
+    AUTO_TUI_AGENT_ARGS[agent]
+  if (automatic('claude') && automatic('codex')) {
+    return 'auto'
+  }
+  // Seed from each agent's arguments; the all-agent summary can reflect unrelated overrides.
   const bypasses = (agent: 'claude' | 'codex'): boolean =>
     resolvedTuiAgentArgsBypassPermissions(agent, terminal, platform)
   return bypasses('claude') && bypasses('codex') ? 'full-access' : 'ask'

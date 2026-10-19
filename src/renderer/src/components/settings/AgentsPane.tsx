@@ -56,12 +56,13 @@ type AgentsPaneProps = AgentSettingProps & {
 
 export function AgentPermissionsSetting({
   mode,
-  onChange
+  onChange,
+  autoSupported = true
 }: {
   mode: AgentPermissionMode
   onChange: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void
+  autoSupported?: boolean
 }): React.JSX.Element {
-  const visibleMode: Exclude<AgentPermissionMode, 'mixed'> = mode === 'manual' ? 'manual' : 'yolo'
   return (
     <section className="space-y-3">
       <SettingsSubsectionHeader
@@ -91,12 +92,12 @@ export function AgentPermissionsSetting({
           </span>
         }
         description={translate(
-          'auto.components.settings.AgentsPane.agentPermissionsDescription',
-          'Choose whether Orca launches agents with fewer permission prompts or with manual checks.'
+          'settings.agents.permissionsPresetDescription',
+          'Sets terminal permissions and the default for new chats. Existing chats keep their own permissions.'
         )}
         action={
           <SettingsSegmentedControl<AgentPermissionMode>
-            value={visibleMode}
+            value={mode}
             onChange={(nextMode) => {
               if (nextMode !== 'mixed') {
                 onChange(nextMode)
@@ -112,6 +113,14 @@ export function AgentPermissionsSetting({
                 value: 'yolo',
                 label: translate('auto.components.settings.AgentsPane.agentPermissionsYolo', 'Yolo')
               },
+              ...(autoSupported
+                ? [
+                    {
+                      value: 'auto' as const,
+                      label: translate('settings.agents.autoPermissions', 'Auto')
+                    }
+                  ]
+                : []),
               {
                 value: 'manual',
                 label: translate(
@@ -123,6 +132,17 @@ export function AgentPermissionsSetting({
           />
         }
       />
+      <p className="text-xs text-muted-foreground">
+        {autoSupported
+          ? translate(
+              'settings.agents.autoPermissionsDescription',
+              'Auto lets Claude, Claude Agent Teams, and Codex review permission requests. Other agents and custom launch arguments stay as configured. Requires a CLI and model that support Auto.'
+            )
+          : translate(
+              'settings.agents.autoPermissionsUpdateHost',
+              'Update this server to configure Auto permissions.'
+            )}
+      </p>
     </section>
   )
 }
@@ -178,9 +198,10 @@ export function AgentsPane({
 
 function renderAgentPermissions(
   mode: AgentPermissionMode,
-  onChange: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void
+  onChange: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void,
+  autoSupported?: boolean
 ): React.ReactNode {
-  return <AgentPermissionsSetting mode={mode} onChange={onChange} />
+  return <AgentPermissionsSetting mode={mode} onChange={onChange} autoSupported={autoSupported} />
 }
 
 export function AgentStatusHooksSetting({ settings, updateSettings }: AgentSettingProps) {
