@@ -76,7 +76,7 @@ export async function applyWindowLayoutCommand(
       markAgentLaunchesClosedByUser(command.workspace, { kind: 'tab', tabId })
     }
     const reply = await store.applyLayoutCommand({ ...command, force: true }, holders)
-    // Why: a workspace main lacks records nothing; today's close records it in the routed partition.
+    // Why: a workspace main lacks has no partition record to write; the window already removed the tab.
     return reply.ok && reply.result.alreadyClosed
       ? { ok: false, code: 'workspace_not_found' }
       : reply
@@ -124,8 +124,8 @@ export async function applyWindowLayoutCommand(
 }
 
 /**
- * Applied in the one partition holding both workspaces. Workspaces in two partitions are refused:
- * the window's save carries that move, as today.
+ * Applied in the one partition holding both workspaces, or across the two that do (a local and an
+ * SSH workspace) in one durable write: a window save no longer carries the move.
  */
 async function moveTabToWorkspace(
   store: RuntimeStore,
@@ -143,7 +143,10 @@ async function moveTabToWorkspace(
     return { ok: false, code: 'host_not_owned' }
   }
   if (from !== to) {
-    return { ok: false, code: 'other_partition' }
+    if (!store.moveTabToWorkspaceAcrossPartitions) {
+      throw new Error('layout_store_unavailable')
+    }
+    return store.moveTabToWorkspaceAcrossPartitions(command, from, to)
   }
   if (!store.applyLayoutCommand) {
     throw new Error('layout_store_unavailable')
