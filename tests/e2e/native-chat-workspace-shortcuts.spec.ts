@@ -43,8 +43,12 @@ async function verifyWorkspaceCycling(
   const draft = 'Keep this unsent message'
   await composer.fill(draft)
   const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
-  const chatRow = page.locator(`[role="option"][data-worktree-id="${chatWorkspaceId}"]`)
-  const otherRow = page.locator(`[role="option"][data-worktree-id="${otherWorkspaceId}"]`)
+  const chatRow = page.locator(
+    `[role="option"][data-worktree-id=${JSON.stringify(chatWorkspaceId)}]`
+  )
+  const otherRow = page.locator(
+    `[role="option"][data-worktree-id=${JSON.stringify(otherWorkspaceId)}]`
+  )
 
   await page.keyboard.press(`${modifier}+Shift+ArrowDown`)
   await expect(otherRow).toHaveAttribute('aria-current', 'page')
