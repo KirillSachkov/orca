@@ -122,12 +122,7 @@ export function SmartWorkspaceSourceResultList({
             ))}
           </div>
         ) : searchResultRows.length === 0 && visibleLinearReadError && !jiraSource.intent ? (
-          // Why: tighter under the typed-text row so the whole state fits the capped popover.
-          <div
-            role="status"
-            aria-live="polite"
-            className={cn('px-3 text-center text-xs', typedTextActionRow ? 'py-2' : 'py-6')}
-          >
+          <div role="status" aria-live="polite" className="px-3 py-6 text-center text-xs">
             <p className="font-medium text-foreground">
               {translate(
                 'auto.components.new.workspace.SmartWorkspaceNameField.linearLoginUnreadableTitle',
