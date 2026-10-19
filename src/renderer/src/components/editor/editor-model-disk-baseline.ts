@@ -22,6 +22,10 @@ function bumpModelGeneration(model: DiskBaselineModel): void {
   modelGenerations.set(model, (modelGenerations.get(model) ?? 0) + 1)
 }
 const tabModels = new Map<string, DiskBaselineModel>()
+/** The version a refused save found on disk, per tab: what Keep My Edits consents to overwrite. */
+const observedDiskVersions = new Map<string, string>()
+/** Tabs whose Keep My Edits found no known disk version: their next save overwrites once. */
+const overwriteConsents = new Set<string>()
 const watchedModels = new WeakSet<DiskBaselineModel>()
 /** Tabs whose latest edit came from another surface (rich markdown, notebook, CSV, diff, mobile). */
 const otherSurfaceTabs = new Set<string>()
@@ -58,6 +62,8 @@ export function stampEditorModelDiskBaseline(
   bindTabModel(fileId, model)
   modelBaselines.set(model, signature)
   bumpModelGeneration(model)
+  // Why: text read from disk ends the conflict; a consent given for it must not outlive it.
+  forgetDiskConflict(fileId)
 }
 
 /** After this tab's save or the user adopting disk: the model's text is now based on `signature`. */
@@ -129,11 +135,6 @@ export function captureEditorTabSaveSource(fileId: string): () => void {
   }
 }
 
-/** The version a refused save found on disk, per tab: what Keep My Edits consents to overwrite. */
-const observedDiskVersions = new Map<string, string>()
-/** Tabs whose Keep My Edits found no known disk version: their next save overwrites once. */
-const overwriteConsents = new Set<string>()
-
 /** A writer refused this tab's save and reported what disk holds now. */
 export function noteObservedDiskVersion(fileId: string, signature: string | undefined): void {
   if (signature === undefined) {
@@ -159,13 +160,24 @@ export function consentToDiskOverwrite(
     return undefined
   }
   overwriteConsents.delete(fileId)
-  restampEditorModelDiskBaseline(fileId, signature)
+  // Why no generation bump: consent is not newer disk text, so a save already in flight still
+  // records what it wrote when it lands.
+  const model = liveTabModel(fileId)
+  if (model) {
+    modelBaselines.set(model, signature)
+  }
   return signature
 }
 
 /** The version the tab's conflict is with, which an explicit overwrite is checked against. */
 export function getObservedDiskVersion(fileId: string): string | undefined {
   return observedDiskVersions.get(fileId)
+}
+
+/** The tab's conflict ended (a reload): drop what it observed and any consent to overwrite. */
+export function forgetDiskConflict(fileId: string): void {
+  observedDiskVersions.delete(fileId)
+  overwriteConsents.delete(fileId)
 }
 
 /** Taken by the one save that uses it. */

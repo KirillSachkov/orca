@@ -494,6 +494,85 @@ describe('a tab whose shared Monaco model owns the disk baseline', () => {
     expect(tab.disk.files.get(FILE_ID)).toBe('agent again')
   })
 
+  it('never widens an already queued overwrite to a version a later refusal reported', async () => {
+    const tab = attach(setUp('A', 'A'))
+    tab.type('mine')
+    tab.disk.files.set(FILE_ID, 'B')
+    await expect(tab.save()).rejects.toThrow()
+    tab.disk.files.set(FILE_ID, 'C')
+
+    // Two quick Cmd+S over the banner about B: the first finds C; the second was queued for B.
+    const first = requestEditorFileSave({ fileId: FILE_ID, confirmDiskOverwrite: true })
+    const second = requestEditorFileSave({ fileId: FILE_ID, confirmDiskOverwrite: true })
+    await expect(first).rejects.toThrow()
+    await expect(second).rejects.toThrow()
+    expect(tab.disk.files.get(FILE_ID)).toBe('C')
+  })
+
+  it('drops a one-time overwrite consent when Reload re-bases the tab', async () => {
+    const tab = attach(setUp('A', 'A'))
+    tab.type('mine')
+    tab.disk.files.set(FILE_ID, 'B')
+    markFileChangedOnDisk(tab.store.getState(), tab.file(), {
+      connectionId: undefined,
+      origin: 'live'
+    })
+    keepTabEditsOverExternalChange(tab.file())
+    // Reload lands B; then the user edits and an agent writes C.
+    tab.showInPane('B', 'B')
+    tab.type('B edited')
+    tab.disk.files.set(FILE_ID, 'C')
+
+    await expect(tab.save()).rejects.toThrow()
+    expect(tab.disk.files.get(FILE_ID)).toBe('C')
+  })
+
+  it('uses up a one-time overwrite consent on a confirmed Cmd+S', async () => {
+    const tab = attach(setUp('A', 'A'))
+    tab.type('mine')
+    tab.disk.files.set(FILE_ID, 'B')
+    markFileChangedOnDisk(tab.store.getState(), tab.file(), {
+      connectionId: undefined,
+      origin: 'live'
+    })
+    keepTabEditsOverExternalChange(tab.file())
+    tab.store.getState().setExternalMutation(FILE_ID, 'changed')
+    await requestEditorFileSave({ fileId: FILE_ID, confirmDiskOverwrite: true })
+    expect(tab.disk.files.get(FILE_ID)).toBe('mine')
+
+    tab.disk.files.set(FILE_ID, 'agent again')
+    tab.type('mine again')
+    await expect(tab.save()).rejects.toThrow()
+    expect(tab.disk.files.get(FILE_ID)).toBe('agent again')
+  })
+
+  it('records what a slow overwrite wrote even if Keep My Edits ran while it was in flight', async () => {
+    const tab = attach(setUp('A', 'A'))
+    tab.type('mine')
+    tab.disk.files.set(FILE_ID, 'B')
+    await expect(tab.save()).rejects.toThrow()
+    let releaseWrite: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+      releaseWrite = resolve
+    })
+    tab.disk.fs.writeFile.mockImplementationOnce(
+      async ({ filePath, content }: { filePath: string; content: string }) => {
+        tab.disk.files.set(filePath, content)
+        await gate
+        return { ok: true }
+      }
+    )
+    const overwrite = requestEditorFileSave({ fileId: FILE_ID, confirmDiskOverwrite: true })
+    await vi.waitFor(() => expect(tab.disk.fs.writeFile).toHaveBeenCalledTimes(2))
+    keepTabEditsOverExternalChange(tab.file())
+    releaseWrite()
+    await overwrite
+
+    tab.type('mine 2')
+    await tab.save()
+    expect(tab.disk.files.get(FILE_ID)).toBe('mine 2')
+  })
+
   it('checks a save after Reload then Cmd+Z against the reloaded version', async () => {
     const tab = attach(setUp('A', 'A'))
     tab.type('mine')

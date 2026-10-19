@@ -89,6 +89,10 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
       store.getState().openFiles.find((openFile) => openFile.id === file.id),
       confirmDiskOverwrite
     )
+    // Why at enqueue too: a refusal that lands before this save runs must not widen what it may overwrite.
+    const overwriteObservedSignature = overwriteConfirmed
+      ? getObservedDiskVersion(file.id)
+      : undefined
 
     const previousSave = saveQueue.get(file.id) ?? Promise.resolve()
     const queuedSave = previousSave
@@ -163,8 +167,9 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
         const diskPrecondition = getSaveDiskPrecondition(
           saveBaseline.signature,
           trigger,
-          overwriteConfirmed || takeDiskOverwriteConsent(file.id),
-          overwriteConfirmed ? getObservedDiskVersion(file.id) : undefined
+          // Why taken first: a confirmed Cmd+S uses up a pending Keep consent too.
+          takeDiskOverwriteConsent(file.id) || overwriteConfirmed,
+          overwriteObservedSignature
         )
         let writeResult: FileWriteResult
         try {

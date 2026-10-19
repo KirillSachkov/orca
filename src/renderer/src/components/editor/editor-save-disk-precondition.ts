@@ -6,6 +6,7 @@ import type {
 } from '../../../../shared/file-write-disk-precondition'
 import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
 import {
+  forgetDiskConflict,
   noteObservedDiskVersion,
   settleEditorModelAfterOtherSurfaceSave,
   settleEditorModelAfterSave,
@@ -61,7 +62,7 @@ export function adoptWrittenDiskVersion(
   writtenContent: string
 ): void {
   const writtenSignature = getWrittenContentDiskSignature(writtenContent)
-  noteObservedDiskVersion(savedFile.id, undefined)
+  forgetDiskConflict(savedFile.id)
   const liveFile = state.openFiles.find((openFile) => openFile.id === savedFile.id)
   if (liveFile?.lastKnownDiskSignature === savedFile.lastKnownDiskSignature) {
     state.setLastKnownDiskSignature(savedFile.id, writtenSignature)

@@ -12,6 +12,7 @@ import { getDiskChangeRevision } from './editor-changed-on-disk-mark'
 import { getEditorModelOwnerKey } from './editor-model-owner'
 import {
   consentToDiskOverwrite,
+  forgetDiskConflict,
   noteEditorModelSynced,
   stampEditorModelDiskBaseline
 } from './editor-model-disk-baseline'
@@ -120,6 +121,7 @@ export function discardDraftAndReloadContent(
   reloadContent: (file: OpenFile) => void
 ): void {
   const state = useAppStore.getState()
+  forgetDiskConflict(file.id)
   // Why: the draft shadows loaded content (editBuffers ?? fileContents), so it must go first.
   state.clearEditorDraft(file.id)
   state.markFileDirty(file.id, false)
