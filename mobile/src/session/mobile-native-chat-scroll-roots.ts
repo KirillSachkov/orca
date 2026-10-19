@@ -18,6 +18,20 @@ export {
 } from './mobile-native-chat-scroll-root-handle'
 export type { MobileNativeChatRootPosition } from './mobile-native-chat-scroll-root-handle'
 
+/** A disclosure owns its own segment anywhere in an address, its `key:part` leaves, and all below. */
+function disclosureOwns(key: string, address: string): boolean {
+  for (let at = address.indexOf(key); at >= 0; at = address.indexOf(key, at + 1)) {
+    const next = address[at + key.length]
+    if (
+      (at === 0 || address[at - 1] === '/') &&
+      (next === undefined || next === '/' || next === ':')
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
 /** Mounted handles only; the chat's existing bounded memory owns positions across eviction. */
 export class MobileNativeChatScrollRoots {
   private roots = new Map<string, Root>()
@@ -266,12 +280,12 @@ export class MobileNativeChatScrollRoots {
 
   forget(key: string): void {
     for (const root of this.roots.values()) {
-      if (root.address === key || root.address.startsWith(`${key}/`)) {
+      if (disclosureOwns(key, root.address)) {
         this.unregister(root, false)
       }
     }
     for (const child of this.memory.keys()) {
-      if (child === key || child.startsWith(`${key}/`)) {
+      if (disclosureOwns(key, child)) {
         this.memory.delete(child)
       }
     }

@@ -22,7 +22,7 @@ import {
   mobileNativeChatScrollFrame,
   mobileNativeChatReadingParts,
   mobileNativeChatVisible,
-  type MobileNativeChatScrollRoots
+  MobileNativeChatScrollRoots
 } from './mobile-native-chat-scroll-roots'
 import {
   MobileNativeChatDisclosureContext,
@@ -509,4 +509,19 @@ it('keeps the actual changed task checklist through eviction and Tools, isolated
   expect(count()).toBe(before + 1)
   draw([user, tasks], { scope: 'different' })
   expect(count()).toBe(before)
+})
+
+it("forgets a closed tool line's nested command and output positions, not its neighbours'", () => {
+  const at = { top: 30, followsEnd: false }
+  const memory = new Map(
+    ['run:o:true', 'run:o:true/line:a:command', 'run:o:true/line:a:output', 'line:a:command']
+      .concat(['run:o:true/line:ab:command', 'diff:src/line:a.ts'])
+      .map((address) => [address, at] as const)
+  )
+  new MobileNativeChatScrollRoots(memory, 10).forget('line:a')
+  expect([...memory.keys()]).toEqual([
+    'run:o:true',
+    'run:o:true/line:ab:command',
+    'diff:src/line:a.ts'
+  ])
 })
