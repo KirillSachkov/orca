@@ -6,10 +6,8 @@ import {
 } from './mobile-native-chat-disclosure-store'
 import {
   ActivityIndicator,
-  FlatList,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-  Platform,
   Text,
   View
 } from 'react-native'
@@ -34,10 +32,7 @@ import {
 } from './mobile-native-chat-render-data'
 import { useMobileNativeChatRowKeys } from './mobile-native-chat-row-keys'
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
-import {
-  mobileNativeChatRowAnchor,
-  useMobileNativeChatTailFollow
-} from './use-mobile-native-chat-tail-follow'
+import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 import {
   mobileNativeChatComposerPlaceholder,
@@ -57,7 +52,7 @@ import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import { MobileNativeChatScrollHold } from './MobileNativeChatScrollHold'
-import { MobileNativeChatPageList } from './MobileNativeChatPageList'
+import { MobileNativeChatRowList } from './MobileNativeChatRowList'
 import { useMobileNativeChatRowRenderer } from './use-mobile-native-chat-row-renderer'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 import type { OlderPagePhase } from './use-mobile-older-page-loader'
@@ -379,41 +374,16 @@ export function MobileNativeChatView({
               runPlacements={rowKeys.runPlacements}
             >
               <GestureDetector gesture={pinchGesture}>
-                {Platform.OS === 'web' ? (
-                  <MobileNativeChatPageList
-                    {...tail.pageListProps}
-                    rows={turns.listMessages}
-                    rowKeys={rowKeys}
-                    roots={disclosures.roots}
-                    renderItem={renderItem}
-                    rowState={turns.resolveRow}
-                    contentContainerStyle={listContentStyle}
-                    {...{ footer, emptyStateView, onScroll, header: pageHeader, layoutKey }}
-                  />
-                ) : (
-                  <FlatList
-                    {...tail.listProps}
-                    data={turns.listMessages}
-                    keyExtractor={rowKeys.keyOf}
-                    renderItem={renderItem}
-                    contentContainerStyle={listContentStyle}
-                    // Let link/file taps land while the composer keyboard is up
-                    // instead of being swallowed by the dismiss gesture.
-                    keyboardShouldPersistTaps="handled"
-                    onScroll={onScroll}
-                    onScrollBeginDrag={tail.beginUserScroll}
-                    onScrollEndDrag={tail.endUserDrag}
-                    onMomentumScrollBegin={tail.beginMomentum}
-                    onMomentumScrollEnd={tail.endMomentum}
-                    scrollEventThrottle={32}
-                    onContentSizeChange={tail.pinToTailAfterContentResize}
-                    onLayout={tail.pinToTail}
-                    maintainVisibleContentPosition={mobileNativeChatRowAnchor(hasMore === true)}
-                    ListHeaderComponent={header}
-                    ListFooterComponent={footer}
-                    ListEmptyComponent={emptyStateView}
-                  />
-                )}
+                <MobileNativeChatRowList
+                  {...{ tail, rowKeys, renderItem, footer, emptyStateView, onScroll, layoutKey }}
+                  rows={turns.listMessages}
+                  roots={disclosures.roots}
+                  rowState={turns.resolveRow}
+                  contentContainerStyle={listContentStyle}
+                  header={pageHeader}
+                  nativeHeader={header}
+                  hasHeader={hasMore === true}
+                />
               </GestureDetector>
             </MobileNativeChatScrollHold>
           </MobileNativeChatDisclosureContext.Provider>
