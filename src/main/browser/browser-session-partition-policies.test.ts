@@ -256,11 +256,10 @@ describe('partition permission policy', () => {
 
     mocks.requestExternalAppLaunch.mockReturnValueOnce(true)
     requestHandler(guest, 'openExternal', (allowed) => decisions.push(allowed), details)
-    expect(mocks.requestExternalAppLaunch).toHaveBeenCalledWith(
-      guest,
-      'com-okta-authenticator:/deviceChallenge',
-      'https://login.acme.okta.com/frame'
-    )
+    const [launchGuest, launchUrl, requestingUrl] = mocks.requestExternalAppLaunch.mock.calls[0]
+    expect([launchGuest, launchUrl]).toEqual([guest, 'com-okta-authenticator:/deviceChallenge'])
+    // The frame that asked, not the top page.
+    expect(requestingUrl()).toBe('https://login.acme.okta.com/frame')
     expect(mocks.notifyPermissionDenied).not.toHaveBeenCalled()
 
     // A link Orca refuses to ask about keeps the denial notice.

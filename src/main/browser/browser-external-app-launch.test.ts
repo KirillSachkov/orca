@@ -92,9 +92,23 @@ describe('browser external app launch', () => {
     expect(renderer.send).not.toHaveBeenCalled()
   })
 
+  it('names no site when the asking frame is unknown', () => {
+    const renderer = mockRenderer(40)
+    requestBrowserExternalAppLaunch({
+      context: { browserPageId: 'page-4', renderer },
+      rawUrl: OKTA_URL,
+      requestingUrl: () => null
+    })
+    expect(sentRequests(renderer)[0].origin).toBeNull()
+  })
+
   it('refuses a page with no window on this computer', () => {
     expect(
-      requestBrowserExternalAppLaunch({ context: null, rawUrl: OKTA_URL, requestingUrl: () => '' })
+      requestBrowserExternalAppLaunch({
+        context: null,
+        rawUrl: OKTA_URL,
+        requestingUrl: () => null
+      })
     ).toBe(false)
   })
 

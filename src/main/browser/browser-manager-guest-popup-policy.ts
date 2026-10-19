@@ -28,7 +28,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       }
     }
     guest.on('did-create-window', handleDidCreateWindow)
-    guest.setWindowOpenHandler(({ url, frameName, disposition, postBody, features }) => {
+    guest.setWindowOpenHandler(({ url, frameName, disposition, postBody, features, referrer }) => {
       // Why: as in Chrome, every open spends the click, so a popup's click cannot fund a later tab.
       const clicked = gesture.consume()
       const ownerContext = this.resolvePopupOwnerContext(guest.id)
@@ -116,7 +116,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
           origin: safeOrigin(externalUrl),
           action: 'opened-external'
         })
-      } else if (!this.requestExternalAppLaunch(guest, url)) {
+      } else if (!this.requestExternalAppLaunch(guest, url, () => referrer.url || null)) {
         // Why: popup URLs can carry auth redirects/one-time tokens; surface only sanitized origin metadata.
         this.forwardOrQueuePopupEvent(guest.id, {
           origin: safeOrigin(url),
@@ -140,12 +140,13 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
   requestExternalAppLaunch(
     guest: Electron.WebContents,
     rawUrl: string | undefined,
-    requestingUrl?: string
+    requestingUrl: () => string | null
   ): boolean {
+    // Why: the top page's URL would credit an embedded frame's request to the site the user trusts.
     return requestBrowserExternalAppLaunch({
       context: this.getRendererContextForGuest(guest.id),
       rawUrl,
-      requestingUrl: () => requestingUrl ?? guest.getURL()
+      requestingUrl
     })
   }
 

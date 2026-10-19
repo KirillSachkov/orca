@@ -46,7 +46,10 @@ export function toBrowserExternalAppUrl(rawUrl: string | undefined): URL | null 
   }
 }
 
-function requestingOrigin(requestingUrl: string): string | null {
+function requestingOrigin(requestingUrl: string | null): string | null {
+  if (!requestingUrl) {
+    return null
+  }
   try {
     const { origin } = new URL(requestingUrl)
     return origin === 'null' ? null : origin
@@ -63,6 +66,16 @@ function externalAppName(url: string): string | null {
   try {
     return app.getApplicationNameForProtocol(url) || null
   } catch {
+    return null
+  }
+}
+
+/** URL of the frame that started a navigation, or null when Electron cannot say. */
+export function initiatingFrameUrl(frame: Electron.WebFrameMain | null | undefined): string | null {
+  try {
+    return frame && !frame.isDestroyed() ? frame.url : null
+  } catch {
+    // A disposed frame throws on access.
     return null
   }
 }
@@ -97,7 +110,8 @@ function expirePendingLaunch(requestId: string): void {
 export function requestBrowserExternalAppLaunch(args: {
   context: { browserPageId: string; renderer: Electron.WebContents } | null
   rawUrl: string | undefined
-  requestingUrl: () => string
+  /** URL of the frame that asked; null shows the prompt without naming a site. */
+  requestingUrl: () => string | null
 }): boolean {
   const url = toBrowserExternalAppUrl(args.rawUrl)
   const { context } = args

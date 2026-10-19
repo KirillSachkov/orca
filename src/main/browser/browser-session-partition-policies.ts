@@ -176,7 +176,7 @@ export async function installBrowserSessionPartitionPolicies(
         browserManager.requestExternalAppLaunch(
           webContents,
           'externalURL' in details ? details.externalURL : undefined,
-          resolvePermissionNoticeUrl(webContents, details)
+          () => resolvePermissionNoticeUrl(webContents, details) || null
         )
       ) {
         // Why: Orca launches the app itself after the user says yes, so Chromium's own launch stays denied.
