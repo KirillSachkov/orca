@@ -39,6 +39,7 @@ import {
   serializedStateMutationCommand
 } from './host-state/orcad-state-snapshot'
 import { newestStateMtimeCommand } from './host-state/orcad-state-newest-mtime'
+import { orcadSnapshotSpaceCommand } from './host-state/orcad-state-snapshot-space'
 import { posixProcessGroupCommand } from './host-state/orcad-state-mutation-owner-record'
 import { orcadMachineClaimCommand } from './host-state/orcad-machine-claim-command'
 import { orcadMachineHomeProbeCommand } from './host-state/orcad-machine-home'
@@ -166,6 +167,10 @@ const BUILDERS: Readonly<Record<string, (c: HostCase) => string>> = {
   compareOrcadStateSnapshotCommand: ({ host }) =>
     compareOrcadStateSnapshotCommand(host, userDataDir, snapshotDir, baseDir),
   newestStateMtimeCommand: ({ host }) => newestStateMtimeCommand(host, userDataDir, baseDir),
+  orcadSnapshotSpaceCommand: ({ host }) =>
+    orcadSnapshotSpaceCommand(host, userDataDir, `${baseDir}/orcad-snapshots`, baseDir, [
+      'pre-1.4.299-rc.12-1760000000000'
+    ]) ?? '',
   posixProcessGroupCommand: () => posixProcessGroupCommand('"$pid"'),
   orcadMachineClaimCommand: ({ host }) => orcadMachineClaimCommand(host, home, 'k'.repeat(64)),
   orcadMachineHomeProbeCommand: ({ host }) => orcadMachineHomeProbeCommand(host),
