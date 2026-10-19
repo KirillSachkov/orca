@@ -96,7 +96,8 @@ const POSIX_HOST_OP_BYTE_BUDGET = 6 * 1024
 // capture/restore/clear ops leave when they move onto the Node host script (R4-10b, decision D-J);
 // install-lock steal and anything else that runs before a verified Node must shrink in shell.
 const OVER_BUDGET_CEILINGS: Readonly<Record<string, number>> = {
-  captureOrcadStateSnapshotCommand: 15_327,
+  // Correct #30635's stale 15,327 baseline: #30618 had already grown main's capture to 17,407.
+  captureOrcadStateSnapshotCommand: 17_407,
   restoreOrcadStateSnapshotCommand: 20_805,
   clearOrcadStateSnapshotMembersCommand: 9_175,
   tryStealInstallLockCommand: 9_022,
