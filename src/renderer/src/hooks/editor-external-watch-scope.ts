@@ -1,6 +1,11 @@
 import type { AppState } from '@/store'
 import { getWorktreeIdFromVisitKey } from '@/lib/worktree-visit-recency'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
+import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
+import {
+  getDefaultMarkdownViewMode,
+  getMarkdownViewModes
+} from '@/components/editor/markdown-preview-controls'
 
 // Why: recently used workspaces keep their watch so switching back needs no reload.
 export const WARM_RECURSIVE_WATCH_WORKSPACE_COUNT = 3
@@ -10,11 +15,33 @@ export function isBackgroundWatchTrimEnabled(settings: AppState['settings']): bo
   return settings?.trimBackgroundWorkspaceWatches === true
 }
 
-/** Workspaces whose open tabs keep a watch: active, the warm LRU, and any with unsaved edits. */
+// Why: saves are disk-checked only through the shared Monaco text model; rich markdown, CSV and
+// notebook editors and editable diffs write without that check, so their content must stay live.
+function hasUncheckedEditSurface(
+  file: OpenFile,
+  markdownViewMode: Readonly<Record<string, MarkdownViewMode>> | undefined
+): boolean {
+  if (file.readOnly === true || file.csvPreviewOnly === true) {
+    return false
+  }
+  if (file.mode === 'diff') {
+    return file.diffSource === 'unstaged' || !!file.diffSource?.startsWith('combined-')
+  }
+  if (file.mode !== 'edit' || file.language === 'mermaid') {
+    return false
+  }
+  const modes = getMarkdownViewModes(file)
+  const stored = markdownViewMode?.[file.id]
+  const viewMode = stored && modes.includes(stored) ? stored : getDefaultMarkdownViewMode(file)
+  return viewMode === 'rich'
+}
+
+/** Workspaces whose open tabs keep a watch: active, the warm LRU, unsaved edits, and edit surfaces saved without a disk check. */
 export function selectWatchEligibleWorkspaceIds(args: {
   activeWorktreeId: string | null
   lastVisitedAtByWorktreeId: Readonly<Record<string, number>> | undefined
   openFiles: AppState['openFiles']
+  markdownViewMode?: Readonly<Record<string, MarkdownViewMode>>
   exists: (workspaceId: string) => boolean
 }): ReadonlySet<string> {
   const ids = new Set<string>()
@@ -22,12 +49,12 @@ export function selectWatchEligibleWorkspaceIds(args: {
     ids.add(args.activeWorktreeId)
   }
   // Why: edits normally happen only in the active workspace; a rare background edit (mobile) just adds a watch, and the rewatch re-check covers what it missed.
-  // Combined diffs stay watched: they cache bodies per path. Deleted/renamed tabs too: a resync
-  // overflow clears those marks and reloads into a read error, erasing the warning and last content.
+  // Deleted/renamed tabs stay watched too: a resync overflow clears those marks and reloads into a
+  // read error, erasing the warning and last content.
   for (const file of args.openFiles) {
     if (
       (file.isDirty && !isVirtualEditorFile(file)) ||
-      (file.mode === 'diff' && file.diffSource?.startsWith('combined-')) ||
+      hasUncheckedEditSurface(file, args.markdownViewMode) ||
       file.externalMutation === 'deleted' ||
       file.externalMutation === 'renamed'
     ) {

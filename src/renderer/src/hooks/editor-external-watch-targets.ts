@@ -47,7 +47,10 @@ export type EditorExternalWatchTargetState = Pick<
   Partial<
     Pick<
       AppState,
-      'activeWorkspaceExecutionHostId' | 'rightSidebarEffectiveTab' | 'lastVisitedAtByWorktreeId'
+      | 'activeWorkspaceExecutionHostId'
+      | 'rightSidebarEffectiveTab'
+      | 'lastVisitedAtByWorktreeId'
+      | 'markdownViewMode'
     >
   >
 
@@ -74,6 +77,7 @@ let cachedSshConnectionStates: AppState['sshConnectionStates'] | null = null
 let cachedFolderWorkspaces: AppState['folderWorkspaces'] | null = null
 let cachedProjectGroups: AppState['projectGroups'] | null = null
 let cachedLastVisitedAtByWorktreeId: AppState['lastVisitedAtByWorktreeId'] | undefined
+let cachedMarkdownViewMode: AppState['markdownViewMode'] | undefined
 let cachedTrimEnabled = false
 let cachedWatchedTargetsSnapshot: WatchedTargetsSnapshot = {
   targets: [],
@@ -169,7 +173,9 @@ export function selectEditorExternalWatchTargets(
     cachedFolderWorkspaces === state.folderWorkspaces &&
     cachedProjectGroups === state.projectGroups &&
     cachedTrimEnabled === trimEnabled &&
-    (!trimEnabled || cachedLastVisitedAtByWorktreeId === state.lastVisitedAtByWorktreeId)
+    (!trimEnabled ||
+      (cachedLastVisitedAtByWorktreeId === state.lastVisitedAtByWorktreeId &&
+        cachedMarkdownViewMode === state.markdownViewMode))
   ) {
     return cachedWatchedTargetsSnapshot
   }
@@ -181,6 +187,7 @@ export function selectEditorExternalWatchTargets(
         activeWorktreeId: state.activeWorktreeId,
         lastVisitedAtByWorktreeId: state.lastVisitedAtByWorktreeId,
         openFiles: state.openFiles,
+        markdownViewMode: state.markdownViewMode,
         exists: (id) => resolveEditorExternalWatchTargetRows(state, id, null) !== null
       })
     : null
@@ -261,6 +268,7 @@ export function selectEditorExternalWatchTargets(
   cachedFolderWorkspaces = state.folderWorkspaces
   cachedProjectGroups = state.projectGroups
   cachedLastVisitedAtByWorktreeId = state.lastVisitedAtByWorktreeId
+  cachedMarkdownViewMode = state.markdownViewMode
   cachedTrimEnabled = trimEnabled
 
   if (

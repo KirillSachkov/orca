@@ -179,6 +179,33 @@ describe('background workspace watch trim', () => {
     }
   )
 
+  it.each([
+    ['rich markdown (default view)', { language: 'markdown' }, undefined, true],
+    ['markdown in source view', { language: 'markdown' }, 'source', false],
+    ['markdown preview tab', { language: 'markdown', mode: 'markdown-preview' }, undefined, false],
+    ['CSV editor', { language: 'csv' }, undefined, true],
+    ['CSV preview only', { language: 'csv', csvPreviewOnly: true }, undefined, false],
+    ['notebook editor', { language: 'notebook' }, undefined, true],
+    ['notebook as raw JSON', { language: 'notebook' }, 'source', false],
+    ['editable unstaged diff', { mode: 'diff', diffSource: 'unstaged' }, undefined, true],
+    ['staged diff', { mode: 'diff', diffSource: 'staged' }, undefined, false],
+    ['combined diff', { mode: 'diff', diffSource: 'combined-uncommitted' }, undefined, true],
+    ['read-only rich markdown', { language: 'markdown', readOnly: true }, undefined, false],
+    ['plain code editor', { language: 'typescript' }, undefined, false]
+  ] as const)(
+    'background workspace with a clean %s tab stays watched: %s',
+    (_label, extra, viewMode, watched) => {
+      const state = makeState({
+        worktrees,
+        openFiles: [tab('wt0'), tab('wt1', { id: 'surface', ...extra })],
+        activeWorktreeId: 'wt0',
+        trim: true
+      })
+      const withViewMode = viewMode ? { ...state, markdownViewMode: { surface: viewMode } } : state
+      expect(watchedIds(withViewMode)).toEqual(watched ? ['wt0', 'wt1'] : ['wt0'])
+    }
+  )
+
   it('ignores a dirty virtual tab when deciding eligibility', () => {
     const state = makeState({
       worktrees,
