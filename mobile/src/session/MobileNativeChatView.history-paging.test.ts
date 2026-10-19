@@ -259,6 +259,11 @@ describe('MobileNativeChatView: history paging and anchoring', () => {
     })
 
     it('detaches a following reader who drags up slowly, one pixel per scroll event', async () => {
+      // iOS, where it happened: WebKit has no anchoring, so every move that isn't a clamp is the reader's.
+      vi.stubGlobal('navigator', {
+        userAgent:
+          'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/604.1'
+      })
       await render({ folded: ['a1', 'a2', 'a3'].map((id) => assistantTurn(id, id)) })
       scrollTo(500, 1_000)
       resized()
