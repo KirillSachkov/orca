@@ -57,7 +57,8 @@ export function SmartWorkspaceSourceResultList({
     showLinearUrlLoadingFeedback,
     linearReadError
   } = model
-  const visibleLinearReadError = mode === 'linear' || mode === 'smart' ? linearReadError : null
+  // Why: only the Linear tab speaks for Linear; Smart lists what the other sources return.
+  const visibleLinearReadError = mode === 'linear' ? linearReadError : null
   return (
     <>
       {mode === 'gitlab' ? (
@@ -121,17 +122,25 @@ export function SmartWorkspaceSourceResultList({
             ))}
           </div>
         ) : searchResultRows.length === 0 && visibleLinearReadError && !jiraSource.intent ? (
-          // Why: compact so the whole sentence fits under the typed-text row in the capped popover.
-          <p
+          // Why: tighter under the typed-text row so the whole state fits the capped popover.
+          <div
             role="status"
             aria-live="polite"
-            className="px-3 py-2 text-center text-xs text-destructive"
+            className={cn('px-3 text-center text-xs', typedTextActionRow ? 'py-2' : 'py-6')}
           >
-            {translate(
-              'auto.components.new.workspace.SmartWorkspaceNameField.linearCredentialUnreadable',
-              'Orca can’t read your saved Linear login. Reconnect Linear in Settings to search issues.'
-            )}
-          </p>
+            <p className="font-medium text-foreground">
+              {translate(
+                'auto.components.new.workspace.SmartWorkspaceNameField.linearLoginUnreadableTitle',
+                'Reconnect Linear'
+              )}
+            </p>
+            <p className="mt-0.5 text-muted-foreground">
+              {translate(
+                'auto.components.new.workspace.SmartWorkspaceNameField.linearLoginUnreadableBody',
+                'Orca can’t read your saved Linear login. Reconnect it in Settings to search issues.'
+              )}
+            </p>
+          </div>
         ) : searchResultRows.length === 0 && !typedTextActionRow ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
             {jiraSource.intent

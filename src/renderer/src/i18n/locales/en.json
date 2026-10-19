@@ -2355,6 +2355,8 @@
         "851017590d": "Add Linear access",
         "228b25028f": "Browse and start work on your assigned Linear issues directly from here.",
         "6d56559467": "Connect your Linear account",
+        "linearLoginUnreadableTitle": "Reconnect Linear",
+        "linearLoginUnreadableBody": "Orca can’t read your saved Linear login. Reconnect it in Settings to see your issues.",
         "eee68073b2": "Open in Jira",
         "9497f2787c": "Start workspace",
         "eba87f2edb": "No Jira issues found",
@@ -14764,7 +14766,8 @@
             "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
             "emoji": "Emoji",
             "loadingLinearIssue": "Loading Linear issue…",
-            "linearCredentialUnreadable": "Orca can’t read your saved Linear login. Reconnect Linear in Settings to search issues."
+            "linearLoginUnreadableTitle": "Reconnect Linear",
+            "linearLoginUnreadableBody": "Orca can’t read your saved Linear login. Reconnect it in Settings to search issues."
           },
           "ProjectCombobox": {
             "empty": "No projects match your search.",

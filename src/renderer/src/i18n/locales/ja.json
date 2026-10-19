@@ -2127,6 +2127,8 @@
         "851017590d": "Linear アクセスを追加",
         "228b25028f": "ここから直接、割り当てられた Linear Issue を参照して作業を開始できます。",
         "6d56559467": "Linear アカウントを接続する",
+        "linearLoginUnreadableTitle": "Linear を再接続",
+        "linearLoginUnreadableBody": "保存された Linear のログイン情報を Orca が読み取れません。設定で再接続して Issue を表示してください。",
         "eee68073b2": "Jira で開く",
         "9497f2787c": "ワークスペースを開始",
         "eba87f2edb": "Jira Issue が見つかりません",
@@ -14494,7 +14496,8 @@
             "jiraSelectBindFailed": "この Jira Issue をリンクできませんでした。該当するサイトを選択するか Jira に再接続してから、もう一度お試しください。",
             "emoji": "絵文字",
             "loadingLinearIssue": "Linear Issue を読み込み中…",
-            "linearCredentialUnreadable": "保存された Linear のログイン情報を Orca が読み取れません。設定で Linear を再接続して Issue を検索してください。"
+            "linearLoginUnreadableTitle": "Linear を再接続",
+            "linearLoginUnreadableBody": "保存された Linear のログイン情報を Orca が読み取れません。設定で再接続して Issue を検索してください。"
           },
           "ProjectCombobox": {
             "empty": "検索条件に一致するプロジェクトはありません。",

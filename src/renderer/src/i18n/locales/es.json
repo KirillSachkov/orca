@@ -2126,6 +2126,8 @@
         "851017590d": "Agregar acceso Linear",
         "228b25028f": "Explora y empieza a trabajar en tus issues asignados de Linear directamente desde aquí.",
         "6d56559467": "Conecta tu cuenta Linear",
+        "linearLoginUnreadableTitle": "Vuelve a conectar Linear",
+        "linearLoginUnreadableBody": "Orca no puede leer tu inicio de sesión guardado de Linear. Vuelve a conectarlo en Configuración para ver tus issues.",
         "eee68073b2": "Abrir en Jira",
         "9497f2787c": "Iniciar espacio de trabajo",
         "eba87f2edb": "No se encontraron issues de Jira",
@@ -14489,7 +14491,8 @@
             "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
             "emoji": "Emoji",
             "loadingLinearIssue": "Cargando problema Linear...",
-            "linearCredentialUnreadable": "Orca no puede leer tu inicio de sesión guardado de Linear. Vuelve a conectar Linear en Configuración para buscar issues."
+            "linearLoginUnreadableTitle": "Vuelve a conectar Linear",
+            "linearLoginUnreadableBody": "Orca no puede leer tu inicio de sesión guardado de Linear. Vuelve a conectarlo en Configuración para buscar issues."
           },
           "ProjectCombobox": {
             "empty": "Ningún proyecto coincide con tu búsqueda.",

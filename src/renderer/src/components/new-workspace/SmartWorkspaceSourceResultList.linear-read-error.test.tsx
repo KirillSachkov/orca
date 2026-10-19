@@ -70,6 +70,9 @@ function LinearPicker({ value }: { value: string }): React.JSX.Element {
       <button type="button" onClick={() => controller.setMode('linear')}>
         Linear tab
       </button>
+      <button type="button" onClick={() => controller.setMode('smart')}>
+        Smart tab
+      </button>
       <SmartWorkspaceSourceResultList model={controller} onSelect={() => {}} />
     </Command>
   )
@@ -78,19 +81,22 @@ function LinearPicker({ value }: { value: string }): React.JSX.Element {
 describe('composer Linear read errors', () => {
   afterEach(cleanup)
 
-  it('shows the read credential error, and the next successful search clears it', async () => {
+  it('shows the read credential error on the Linear tab only, and a successful search clears it', async () => {
     mocks.state.searchLinearIssues.mockImplementation(async (query) => {
       if (query === 'broken') {
         throw new Error(credentialDecryptionMessage('Linear'))
       }
       return [referenceLinearIssue()]
     })
-    const message =
-      'Orca can’t read your saved Linear login. Reconnect Linear in Settings to search issues.'
+    const message = 'Reconnect Linear'
     const { rerender } = render(<LinearPicker value="broken" />)
     fireEvent.click(screen.getByRole('button', { name: 'Linear tab' }))
 
-    await waitFor(() => expect(screen.getByRole('status').textContent).toBe(message))
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        `${message}Orca can’t read your saved Linear login. Reconnect it in Settings to search issues.`
+      )
+    )
 
     // The status refresh after the failure re-runs the same read; the error must stay up.
     mocks.state.linearStatus = {
@@ -101,6 +107,10 @@ describe('composer Linear read errors', () => {
     expect(screen.getByText(message)).toBeTruthy()
     await waitFor(() => expect(mocks.state.searchLinearIssues).toHaveBeenCalledTimes(2))
     expect(screen.getByText(message)).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Smart tab' }))
+    expect(screen.queryByText(message)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Linear tab' }))
 
     rerender(<LinearPicker value="launch" />)
     await waitFor(() => expect(screen.getByText(/Task/)).toBeTruthy())

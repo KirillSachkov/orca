@@ -5,6 +5,8 @@ import {
   shouldOfferLinearIssueFetchMore
 } from '@/components/task-page-linear-issue-empty-state'
 import { Button } from '@/components/ui/button'
+import { LinearIcon } from '@/components/task-page-localized-options'
+import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
 import {
   clampLinearIssueListLimit,
   LINEAR_ISSUE_LIST_MAX
@@ -31,6 +33,11 @@ export function TaskPageLinearIssueBoard({
     linearSearchActive,
     filteredLinearIssues
   } = model
+  // Why: an unreadable login is a connection state, shown where the issues would be like "not connected".
+  const linearLoginUnreadable =
+    Boolean(activeLinearIssueError) &&
+    activeLinearIssues.length === 0 &&
+    isIntegrationCredentialDecryptionError(activeLinearIssueError)
   return (
     <div
       className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
@@ -38,13 +45,26 @@ export function TaskPageLinearIssueBoard({
         scrollbarGutter: 'stable'
       }}
     >
-      {activeLinearIssueError ? (
+      {linearLoginUnreadable ? (
+        <div className="m-4 flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm">
+          <LinearIcon className="mb-4 size-8 text-muted-foreground/60" />
+          <p className="text-base font-medium text-foreground">
+            {translate('auto.components.TaskPage.linearLoginUnreadableTitle', 'Reconnect Linear')}
+          </p>
+          <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+            {translate(
+              'auto.components.TaskPage.linearLoginUnreadableBody',
+              'Orca can’t read your saved Linear login. Reconnect it in Settings to see your issues.'
+            )}
+          </p>
+        </div>
+      ) : activeLinearIssueError ? (
         <div className="border-b border-border px-4 py-4 text-sm text-destructive">
           {activeLinearIssueError}
         </div>
       ) : null}
 
-      {activeLinearIssueLoading && activeLinearIssues.length === 0 ? (
+      {activeLinearIssueLoading && activeLinearIssues.length === 0 && !linearLoginUnreadable ? (
         <div className="divide-y divide-border/50">
           {Array.from({
             length: 12
