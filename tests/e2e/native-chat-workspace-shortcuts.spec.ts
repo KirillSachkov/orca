@@ -72,7 +72,7 @@ async function verifyWorkspaceCycling(
   await page.evaluate(async () => {
     await window.__store
       ?.getState()
-      .setKeybindingOverride('worktree.navigateDown', ['Mod+Alt+ArrowDown'])
+      .setKeybindingOverride('worktree.navigateDown', ['Mod+Shift+F12'])
   })
   await page.keyboard.press('ArrowLeft')
   await page.keyboard.press(`${modifier}+Shift+ArrowDown`)
@@ -88,7 +88,7 @@ async function verifyWorkspaceCycling(
     )
     .not.toBe('')
   await expect(composer).toHaveText(draft)
-  await page.keyboard.press(`${modifier}+Alt+ArrowDown`)
+  await page.keyboard.press(`${modifier}+Shift+F12`)
   await expect(otherRow).toHaveAttribute('aria-current', 'page')
 }
 
