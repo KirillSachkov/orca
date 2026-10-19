@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { applyDiffSectionLiveEdit } from './diff-section-live-edit'
 import type { DiffOnMount } from '@monaco-editor/react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { detectLanguage } from '@/lib/language-detect'
@@ -76,6 +77,23 @@ export function DiffSectionItem({
   )
 
   const [modifiedEditor, setModifiedEditor] = useState<monacoEditor.ICodeEditor | null>(null)
+  // Why: the model is swapped per contentGeneration without remounting, so each model remembers the
+  // generation it was created for; edits from a superseded model are ignored.
+  const contentGenerationRef = useRef(section.contentGeneration ?? 0)
+  contentGenerationRef.current = section.contentGeneration ?? 0
+  const modelGenerationsRef = useRef(new WeakMap<monacoEditor.ITextModel, number>())
+  const labelModelGeneration = (
+    model: monacoEditor.ITextModel | null,
+    generation: number
+  ): void => {
+    // Only the first label sticks: an old model must keep its generation if the swap lands later.
+    if (model && !modelGenerationsRef.current.has(model)) {
+      modelGenerationsRef.current.set(model, generation)
+    }
+  }
+  useEffect(() => {
+    labelModelGeneration(modifiedEditor?.getModel() ?? null, section.contentGeneration ?? 0)
+  }, [modifiedEditor, section.contentGeneration])
   const diffEditorRef = useRef<monacoEditor.IStandaloneDiffEditor | null>(null)
   const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
   const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
@@ -241,38 +259,26 @@ export function DiffSectionItem({
     )
     const cleanupOriginalFindShortcut = installMonacoEditorFindShortcut(original)
     const cleanupModifiedFindShortcut = installMonacoEditorFindShortcut(modified)
+    const sectionKey = section.key
+    labelModelGeneration(modified.getModel(), contentGenerationRef.current)
     const modelContentSub = modified.onDidChangeModelContent(() => {
       const current = modified.getValue()
-      setSections((prev) => {
-        let changed = false
-        const next = prev.map((s, i) => {
-          if (i !== index) {
-            return s
-          }
-
-          const savedModifiedContent =
-            s.diffResult?.kind === 'text' ? s.diffResult.modifiedContent : s.modifiedContent
-          const dirty = current !== savedModifiedContent
-          if (s.modifiedContent === current && s.dirty === dirty) {
-            return s
-          }
-
-          changed = true
-          // Why: virtualized rows unmount when scrolled away, so the draft must
-          // live in section state instead of only in Monaco's mounted model.
-          return {
-            ...s,
-            modifiedContent: current,
-            dirty,
-            largeDiffRenderLimit: getLiveDiffSectionRenderLimit({
+      const model = modified.getModel()
+      const editedGeneration = model ? modelGenerationsRef.current.get(model) : undefined
+      setSections((prev) =>
+        applyDiffSectionLiveEdit(prev, {
+          index,
+          sectionKey,
+          editedGeneration,
+          content: current,
+          renderLimit: (s) =>
+            getLiveDiffSectionRenderLimit({
               section: s,
               modifiedEditor: modified,
               modifiedContent: current
             })
-          }
         })
-        return changed ? next : prev
-      })
+      )
     })
     modified.onDidDispose(() => {
       // Why: editable diff sections own both panes' shortcut bridges and the
