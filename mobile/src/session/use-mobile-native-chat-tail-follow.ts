@@ -182,10 +182,10 @@ export function useMobileNativeChatTailFollow(args: {
           )
         : null
       list?.observeWith?.(observer)
+      // Only a move toward the end attaches: a clamp onto a shorter end moves up, even one that
+      // lands under the reader's finger (a tap on a collapse below them).
       list?.watchMotion?.(({ by, moved, fromEnd }) => {
-        if (by === 'reader' && fromEnd <= PAGE_MOVE_SLOP) {
-          setFollowing(true)
-        } else if (followingRef.current) {
+        if (followingRef.current) {
           if (by === 'reader' && moved < -PAGE_MOVE_SLOP && fromEnd > PAGE_MOVE_SLOP) {
             setFollowing(false)
           }
