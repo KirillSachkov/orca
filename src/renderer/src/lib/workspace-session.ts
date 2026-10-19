@@ -9,6 +9,7 @@ import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-sessio
 import { normalizeWorkspaceDocHistoryEntries } from '../../../shared/workspace-doc-history'
 import type { AppState } from '../store'
 import type { OpenFile } from '../store/slices/editor'
+import { persistedEditorDraftFields } from '../components/editor/editor-model-disk-baseline'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
@@ -145,8 +146,9 @@ export function buildEditorSessionData(
       // Why: persist readOnly only when true; absence is the writable default on restore.
       ...(f.readOnly === true ? { readOnly: true } : {}),
       ...(f.readOnly === true && f.liveTail === true ? { liveTail: true } : {}),
-      ...(dirtyDraftContent !== undefined ? { dirtyDraftContent } : {}),
-      ...(dirtyDraftContent !== undefined ? getDraftAutosaveGuardFields(f) : {})
+      ...(dirtyDraftContent !== undefined ? getDraftAutosaveGuardFields(f) : {}),
+      // Why: the draft and its base come from the model when it holds them (see persistedEditorDraftFields).
+      ...persistedEditorDraftFields(f.id, dirtyDraftContent, f.lastKnownDiskSignature)
     })
     const ids =
       editFileIdsByWorktree[f.worktreeId] ?? (editFileIdsByWorktree[f.worktreeId] = new Set())
