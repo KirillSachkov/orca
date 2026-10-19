@@ -22,13 +22,16 @@ const harness = vi.hoisted(() => {
     targets,
     unwatched,
     openFiles,
-    readyImmediately: true
+    setExternalMutation: vi.fn()
   }
 })
 
 vi.mock('@/store', () => ({
   useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector({}), {
-    getState: () => ({ openFiles: harness.openFiles, setExternalMutation: vi.fn() })
+    getState: () => ({
+      openFiles: harness.openFiles,
+      setExternalMutation: harness.setExternalMutation
+    })
   })
 }))
 vi.mock('./editor-external-watch-targets', async (importOriginal) => ({
@@ -98,6 +101,7 @@ describe('useEditorExternalWatch resync through the real reconciliation path', (
     vi.useFakeTimers()
     reloads = []
     harness.openFiles.splice(0)
+    harness.setExternalMutation.mockClear()
     previousApi = (window as unknown as { api?: unknown }).api
     ;(window as unknown as { api: unknown }).api = {
       fs: {
@@ -155,5 +159,53 @@ describe('useEditorExternalWatch resync through the real reconciliation path', (
     await act(async () => vi.advanceTimersByTimeAsync(200))
 
     expect(reloads).toEqual(['wt-runtime:r.ts'])
+  })
+
+  it('resyncs only the re-added workspace, leaving another on the same root alone', async () => {
+    const a = {
+      worktreeId: 'folder:a',
+      worktreePath: '/shared',
+      connectionId: undefined,
+      runtimeEnvironmentId: null
+    }
+    const b = { ...a, worktreeId: 'folder:b' }
+    harness.openFiles.push(tab('folder:a', 'a.ts'), tab('folder:b', 'b.ts'), {
+      ...tab('folder:b', 'gone.ts'),
+      externalMutation: 'deleted'
+    })
+    await render([b], [a])
+    await render([a, b], [])
+    await act(async () => vi.advanceTimersByTimeAsync(200))
+
+    expect(reloads).toEqual(['folder:a:a.ts'])
+    expect(harness.setExternalMutation).not.toHaveBeenCalled()
+  })
+
+  it('keeps a local and an SSH workspace at the same path apart', async () => {
+    const local = {
+      worktreeId: 'local-wt',
+      worktreePath: '/shared',
+      connectionId: undefined,
+      runtimeEnvironmentId: null
+    }
+    const ssh = { ...local, worktreeId: 'ssh-wt', connectionId: 'ssh-1' }
+    harness.openFiles.push(tab('local-wt', 'x.ts'), tab('ssh-wt', 'x.ts'))
+    await render([local, ssh], [])
+
+    emitFsChanged({
+      worktreePath: '/shared',
+      events: [{ kind: 'update', absolutePath: '/shared/x.ts' }]
+    })
+    await act(async () => vi.advanceTimersByTimeAsync(200))
+    expect(reloads).toEqual(['local-wt:x.ts'])
+
+    reloads = []
+    emitFsChanged({
+      worktreePath: '/shared',
+      events: [{ kind: 'update', absolutePath: '/shared/x.ts' }],
+      connectionId: 'ssh-1'
+    })
+    await act(async () => vi.advanceTimersByTimeAsync(200))
+    expect(reloads).toEqual(['ssh-wt:x.ts'])
   })
 })

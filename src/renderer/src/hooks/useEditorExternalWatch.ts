@@ -5,7 +5,6 @@ import { normalizeRuntimePathForComparison } from '../../../shared/cross-platfor
 import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 import {
   getEditorExternalWatchTargetKey,
-  getOpenFileRuntimeOwner,
   selectEditorExternalWatchTargets,
   type EditorExternalWatchTarget
 } from './editor-external-watch-targets'
@@ -18,17 +17,11 @@ import {
   type HeldWatchRoots
 } from './editor-external-watch-local-roots'
 
-/** True when the target has tabs loaded before, so writes made while it was unwatched could be missed. */
-function hasLoadedTabs(target: EditorExternalWatchTarget): boolean {
-  return useAppStore
-    .getState()
-    .openFiles.some(
-      (file) =>
-        file.worktreeId === target.worktreeId &&
-        getOpenFileRuntimeOwner(file) === target.runtimeEnvironmentId &&
-        !!file.lastKnownDiskSignature
-    )
-}
+type FsChangedHandler = (
+  payload: FsChangedPayload,
+  runtimeEnvironmentId?: string | null,
+  onlyTarget?: EditorExternalWatchTarget
+) => void
 
 function warnExternalWatchFailure(target: EditorExternalWatchTarget, err: unknown): void {
   console.warn('[filesystem-watch] failed to watch worktree', {
@@ -46,9 +39,7 @@ export function useEditorExternalWatch(): void {
   const unwatchedTargetKeysRef = useRef<ReadonlySet<string>>(new Set())
   const remoteWatchUnsubsRef = useRef(new Map<string, () => void>())
   const heldWatchRootsRef = useRef<HeldWatchRoots>(new Map())
-  const fsChangedHandlerRef = useRef<
-    ((payload: FsChangedPayload, runtimeEnvironmentId?: string | null) => void) | null
-  >(null)
+  const fsChangedHandlerRef = useRef<FsChangedHandler | null>(null)
 
   // Why: diff targets so unchanged worktrees keep their subscription; full teardown on every store change drops events in the gap.
   useEffect(() => {
@@ -71,16 +62,16 @@ export function useEditorExternalWatch(): void {
     for (const target of added) {
       // Why: writes made while it was unwatched (background trim) were never reported. Resync like a
       // reconnect does — one overflow through the normal pipeline — once the watch is in place.
-      const needsResync =
-        previousUnwatchedKeys.has(getEditorExternalWatchTargetKey(target)) || hasLoadedTabs(target)
-      const resync = needsResync
+      const resync = previousUnwatchedKeys.has(getEditorExternalWatchTargetKey(target))
         ? () =>
             fsChangedHandlerRef.current?.(
               {
                 worktreePath: target.worktreePath,
-                events: [{ kind: 'overflow', absolutePath: target.worktreePath }]
+                events: [{ kind: 'overflow', absolutePath: target.worktreePath }],
+                connectionId: target.connectionId
               },
-              target.runtimeEnvironmentId
+              target.runtimeEnvironmentId,
+              target
             )
         : undefined
       if (target.runtimeEnvironmentId) {
@@ -115,12 +106,14 @@ export function useEditorExternalWatch(): void {
     const remoteWatchUnsubs = remoteWatchUnsubsRef.current
     const heldWatchRoots = heldWatchRootsRef.current
     const { handleFsChanged, dispose } = buildEditorExternalWatchEventHandler(
-      (worktreePath, runtimeEnvironmentId) =>
+      (worktreePath, runtimeEnvironmentId, connectionId) =>
         targetsRef.current.filter(
           (target) =>
             normalizeRuntimePathForComparison(target.worktreePath) ===
               normalizeRuntimePathForComparison(worktreePath) &&
-            target.runtimeEnvironmentId === runtimeEnvironmentId
+            target.runtimeEnvironmentId === runtimeEnvironmentId &&
+            // Why: a local and an SSH root can share a path; runtime streams are already per host.
+            (runtimeEnvironmentId !== null || target.connectionId === connectionId)
         )
     )
     const unsubscribe = window.api.fs.onFsChanged((payload) => handleFsChanged(payload, null))
@@ -145,9 +138,7 @@ export function useEditorExternalWatch(): void {
 function subscribeRuntimeTarget(
   target: EditorExternalWatchTarget,
   remoteWatchUnsubs: Map<string, () => void>,
-  fsChangedHandlerRef: {
-    current: ((payload: FsChangedPayload, runtimeEnvironmentId?: string | null) => void) | null
-  },
+  fsChangedHandlerRef: { current: FsChangedHandler | null },
   onFirstReady: (() => void) | undefined
 ): void {
   const runtimeEnvironmentId = target.runtimeEnvironmentId

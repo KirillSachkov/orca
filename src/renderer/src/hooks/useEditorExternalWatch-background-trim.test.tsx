@@ -14,7 +14,6 @@ type TestWatchTarget = {
 const harness = vi.hoisted(() => {
   const targets: TestWatchTarget[] = []
   const unwatched: TestWatchTarget[] = []
-  const loadedTabs: { worktreeId: string; lastKnownDiskSignature: string }[] = []
   const runtimeReady: { current: (() => void) | undefined } = { current: undefined }
   return {
     runtimeReady,
@@ -24,15 +23,12 @@ const harness = vi.hoisted(() => {
     unwatched,
     // Why: the hook resyncs through the event handler's overflow path; this records those calls.
     catchUp: vi.fn(),
-    loadedTabs,
     runtimeUnsubscribe: vi.fn()
   }
 })
 
 vi.mock('@/store', () => ({
-  useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector({}), {
-    getState: () => ({ openFiles: harness.loadedTabs })
-  })
+  useAppStore: (selector: (state: unknown) => unknown) => selector({})
 }))
 vi.mock('./editor-external-watch-targets', () => ({
   selectEditorExternalWatchTargets: () => ({
@@ -67,16 +63,15 @@ vi.mock('./editor-external-watch-disk-verification', () => ({
 
 import { useEditorExternalWatch } from './useEditorExternalWatch'
 
-function resyncOf(target: {
-  worktreePath: string
-  runtimeEnvironmentId: string | null
-}): [unknown, string | null] {
+function resyncOf(target: TestWatchTarget): [unknown, string | null, TestWatchTarget] {
   return [
     {
       worktreePath: target.worktreePath,
-      events: [{ kind: 'overflow', absolutePath: target.worktreePath }]
+      events: [{ kind: 'overflow', absolutePath: target.worktreePath }],
+      connectionId: target.connectionId
     },
-    target.runtimeEnvironmentId
+    target.runtimeEnvironmentId,
+    target
   ]
 }
 
@@ -120,7 +115,6 @@ describe('useEditorExternalWatch with background trim', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    harness.loadedTabs.splice(0)
     watchWorktree = vi.fn(
       () =>
         new Promise<void>((resolve) => {
@@ -191,15 +185,6 @@ describe('useEditorExternalWatch with background trim', () => {
     await act(async () => resolveWatch())
 
     expect(harness.catchUp).not.toHaveBeenCalled()
-  })
-
-  it('refreshes any re-added workspace whose tabs were loaded before', async () => {
-    harness.loadedTabs.push({ worktreeId: 'background', lastKnownDiskSignature: 'sig' })
-    await render([active], [])
-    await render([active, background], [])
-    await act(async () => resolveWatch())
-
-    expect(harness.catchUp).toHaveBeenCalledWith(...resyncOf(background))
   })
 
   it('keeps a directory watched while another workspace on it still needs it', async () => {

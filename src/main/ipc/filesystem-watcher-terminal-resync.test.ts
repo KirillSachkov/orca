@@ -35,7 +35,8 @@ const WORKTREE_PATH = '/home/me/repo'
 const ARGS = { worktreePath: WORKTREE_PATH, connectionId: 'conn-1' }
 const OVERFLOW_PAYLOAD = {
   worktreePath: WORKTREE_PATH,
-  events: [{ kind: 'overflow', absolutePath: WORKTREE_PATH }]
+  events: [{ kind: 'overflow', absolutePath: WORKTREE_PATH }],
+  connectionId: 'conn-1'
 }
 
 type MockSender = {

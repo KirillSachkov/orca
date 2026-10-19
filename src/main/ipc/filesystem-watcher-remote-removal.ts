@@ -92,7 +92,8 @@ export async function restoreRemoteWatcherAfterFailedRemoval(
     }
     sender.send('fs:changed', {
       worktreePath,
-      events: [{ kind: 'overflow', absolutePath: worktreePath }]
+      events: [{ kind: 'overflow', absolutePath: worktreePath }],
+      connectionId
     } satisfies FsChangedPayload)
   }
 }
