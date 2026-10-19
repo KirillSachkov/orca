@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import { chatImageAccess } from '@/lib/local-file-access'
 import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session-attachments'
 import {
+  records,
   restoredImageChecks,
   restoredImageKey,
   NO_IMAGE_CHECKS,
@@ -146,6 +147,40 @@ export async function verifyRestoredNativeChatComposerDraftImages(scopeKey: stri
       }
     })
   )
+}
+
+function isInsideUploadDir(path: string, uploadDir: string): boolean {
+  return (
+    path.startsWith(uploadDir) &&
+    (path[uploadDir.length] === '/' || path[uploadDir.length] === '\\')
+  )
+}
+
+/** A sweep may have removed this local upload folder after a draft's restore check said its image
+ *  was there, so every loaded draft naming it checks again, whether its composer is shown or not. */
+export function recheckNativeChatComposerDraftImagesIn(uploadDir: string): void {
+  for (const scopeKey of records.keys()) {
+    const named = readNativeChatComposerDraft(scopeKey).images.filter(
+      (image) =>
+        image.unavailableName === undefined &&
+        !image.connectionId &&
+        !!image.path &&
+        isInsideUploadDir(image.path, uploadDir)
+    )
+    if (named.length === 0) {
+      continue
+    }
+    // A fresh entry replaces any attempt in flight, whose answer predates the removal.
+    const keys = new Set(named.map(restoredImageKey))
+    restoredImageChecks.set(scopeKey, [
+      ...(restoredImageChecks.get(scopeKey) ?? NO_IMAGE_CHECKS).filter(
+        (entry) => !keys.has(restoredImageKey(entry.image))
+      ),
+      ...named.map((image) => ({ image }))
+    ])
+    notifyScope(scopeKey)
+    void verifyRestoredNativeChatComposerDraftImages(scopeKey)
+  }
 }
 
 /** Only an eligible image's finite restore work holds its chip, independent of deferred peers. */

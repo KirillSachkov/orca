@@ -145,8 +145,10 @@ describe('sweepAgentSessionAttachments', () => {
     claim('session-1', await seedUpload(SENT, OLD))
     await seedUpload(UNSENT, OLD)
     await seedUpload(CARRIED, HOUR)
-    const { removed } = await sweepAgentSessionAttachments(store, facts(), NOW)
+    const onUploadRemoved = vi.fn()
+    const { removed } = await sweepAgentSessionAttachments(store, facts({ onUploadRemoved }), NOW)
     expect(removed).toEqual([join(store.rootDir, UNSENT)])
+    expect(onUploadRemoved.mock.calls).toEqual([[join(store.rootDir, UNSENT)]])
     expect(await remaining()).toEqual([SENT, CARRIED].sort())
   })
 
@@ -203,7 +205,9 @@ describe('sweepAgentSessionAttachments', () => {
     await seedUpload(UNSENT, HOUR)
     // Marked, then the process died before the files went.
     expect(markUnclaimedUploadForSweep(db, UNSENT, NOW)).toBe(true)
-    await sweepAgentSessionAttachments(store, facts(), NOW)
+    const onUploadRemoved = vi.fn()
+    await sweepAgentSessionAttachments(store, facts({ onUploadRemoved }), NOW)
+    expect(onUploadRemoved).toHaveBeenCalledWith(join(store.rootDir, UNSENT))
     expect(await remaining()).toEqual([])
     expect(db.prepare('SELECT COUNT(*) AS n FROM agent_session_attachment_sweeps').get()).toEqual({
       n: 0

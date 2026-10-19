@@ -19,6 +19,7 @@ import { useAppStore } from '@/store'
 import * as draftStore from './native-chat-composer-draft-store'
 import * as draftStorage from './native-chat-composer-draft-storage'
 import { nativeChatImagesHoldSend } from './native-chat-image-reattach'
+import { recheckNativeChatComposerDraftImagesIn } from './native-chat-composer-draft-image-check'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
@@ -202,6 +203,43 @@ describe('useNativeChatComposerAttachments', () => {
         newer
       ])
       act(() => probe.root.unmount())
+    } finally {
+      Object.assign(window, { api: originalApi })
+    }
+  })
+
+  it('marks a restored image Not kept when a later sweep removes its upload, composer shown or not', async () => {
+    const scope = 'agent-session:swept-later'
+    const image = { id: 'old', path: '/state/agent-session-attachments/upload/shot.png' }
+    const other = { id: 'other', path: '/state/agent-session-attachments/upload-2/b.png' }
+    const storage = draftStorage.createMemoryNativeChatComposerDraftStorage()
+    storage.drafts.set(scope, { text: 'hi', images: [image, other], savedAt: 1 })
+    draftStorage.setNativeChatComposerDraftStorageForTests(storage)
+    draftStore.setNativeChatComposerDraftOwnerResolver(() => ({
+      workspaceId: 'wt',
+      executionHostId: 'local'
+    }))
+    let present = true
+    const pathExists = vi.fn(async () => present)
+    const originalApi = window.api
+    Object.assign(window, { api: { fs: { pathExists }, ui: {} } })
+    try {
+      await draftStore.hydrateNativeChatComposerDrafts()
+      const probe = await renderProbe(scope, true)
+      await act(async () => {})
+      expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(false)
+      act(() => probe.root.unmount())
+      present = false
+      await act(async () =>
+        recheckNativeChatComposerDraftImagesIn('/state/agent-session-attachments/upload')
+      )
+      expect(draftStore.readNativeChatComposerDraft(scope).images).toMatchObject([
+        { id: 'old', path: '', unavailableName: 'shot.png' },
+        other
+      ])
+      const reopened = await renderProbe(scope, true)
+      expect(nativeChatImagesHoldSend(reopened.latest().imageAttachments)).toBe(true)
+      act(() => reopened.root.unmount())
     } finally {
       Object.assign(window, { api: originalApi })
     }

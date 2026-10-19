@@ -5,6 +5,7 @@ import {
   setNativeChatComposerDraftOwnerResolver,
   waitForNativeChatComposerDrafts
 } from '@/components/native-chat/native-chat-composer-draft-store'
+import { recheckNativeChatComposerDraftImagesIn } from '@/components/native-chat/native-chat-composer-draft-image-check'
 
 // Why bounded: loading drafts is bookkeeping and must never hold startup; a slower load still
 // fills in every draft not edited meanwhile when it lands.
@@ -15,6 +16,8 @@ export function startNativeChatDraftLoad(): void {
   setNativeChatComposerDraftOwnerResolver((scopeKey) =>
     resolveNativeChatDraftOwner(useAppStore.getState(), scopeKey)
   )
+  // Before the load: a removal after a draft's restore check must reach it.
+  window.api?.ui?.onAgentSessionUploadRemoved?.(recheckNativeChatComposerDraftImagesIn)
   void hydrateNativeChatComposerDrafts()
 }
 
