@@ -8,6 +8,8 @@ import { toEditorModelUri } from './editor-model-uri'
 import { __clearSelfWriteRegistryForTests } from './editor-self-write-registry'
 import { replaceModelContentAsUndoStep } from './monaco-content-sync'
 import { watchReloadUndoBoundary } from './reload-undo-autosave-pause'
+import { localEditorModelOwnerKey } from './editor-model-owner'
+import type * as EditorModelOwner from './editor-model-owner'
 
 const holder = vi.hoisted(() => {
   const value: { store: { getState: () => unknown } | null } = { store: null }
@@ -15,9 +17,18 @@ const holder = vi.hoisted(() => {
 })
 vi.mock('@/store', () => ({ useAppStore: { getState: () => holder.store?.getState() } }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+// Why: these tabs are local; one workspace's tabs for a file share its model.
+vi.mock('./editor-model-owner', async (importOriginal) => {
+  const actual = await importOriginal<typeof EditorModelOwner>()
+  return {
+    ...actual,
+    getEditorModelOwnerKey: (file: { worktreeId: string }) =>
+      actual.localEditorModelOwnerKey(file.worktreeId)
+  }
+})
 
 const FILE_ID = '/repo/file.ts'
-const MODEL_KEY = toEditorModelUri(FILE_ID)
+const MODEL_KEY = toEditorModelUri(FILE_ID, localEditorModelOwnerKey('wt-1'))
 
 describe('autosave pause after undoing past a reload', () => {
   let model: monaco.editor.ITextModel
