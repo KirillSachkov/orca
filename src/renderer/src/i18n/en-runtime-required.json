@@ -1123,6 +1123,8 @@
         "AgentsPane": {
           "9b175d0f5e": "Pre-selected agent when opening a new workspace.",
           "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
+          "agentPermissionsInfo": "Agent permissions info",
+          "agentPermissionsTooltip": "Doesn't apply to agents where you've overridden launch arguments.",
           "c8794e622e": "Detected",
           "db9e9e5887": "Customize command",
           "df123171d1": "Not installed"
@@ -3256,6 +3258,9 @@
         "probeSkippedHosts": "Hosts routed without the connection check (Try anyway):",
         "title": "Browse through SSH workspace hosts"
       }
+    },
+    "chat": {
+      "permissionsDescription": "New chats only. Agent-specific defaults are in Settings → Agents."
     }
   },
   "sparsePreset": {

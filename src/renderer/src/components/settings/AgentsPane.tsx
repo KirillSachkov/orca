@@ -1,5 +1,12 @@
-import { Info } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { Button } from '../ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '../ui/dropdown-menu'
+import { ChevronDown } from 'lucide-react'
 import type { AgentPermissionMode } from '../../../../shared/tui-agent-permissions'
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
@@ -16,13 +23,8 @@ import {
   getAgentWorkspaceTrustDescription,
   getAgentWorkspaceTrustTitle
 } from './agent-workspace-trust-copy'
-import {
-  SettingsSegmentedControl,
-  SettingsSubsectionHeader,
-  SettingsSwitchRow
-} from './SettingsFormControls'
+import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { getAgentsPaneSearchEntries } from './agents-search'
 import {
@@ -55,95 +57,35 @@ type AgentsPaneProps = AgentSettingProps & {
 }
 
 export function AgentPermissionsSetting({
-  mode,
-  onChange,
-  autoSupported = true
+  onChange
 }: {
   mode: AgentPermissionMode
   onChange: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void
   autoSupported?: boolean
 }): React.JSX.Element {
   return (
-    <section className="space-y-3">
-      <SettingsSubsectionHeader
-        title={
-          <span className="flex items-center gap-2">
-            {translate('auto.components.settings.AgentsPane.agentPermissions', 'Agent Permissions')}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={translate(
-                    'auto.components.settings.AgentsPane.agentPermissionsInfo',
-                    'Agent permissions info'
-                  )}
-                  className="grid size-5 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                >
-                  <Info className="size-3.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6}>
-                {translate(
-                  'auto.components.settings.AgentsPane.agentPermissionsTooltip',
-                  "Doesn't apply to agents where you've overridden launch arguments."
-                )}
-              </TooltipContent>
-            </Tooltip>
-          </span>
-        }
-        description={translate(
-          'settings.agents.permissionsPresetDescription',
-          'Sets terminal permissions and the default for new chats. Existing chats keep their own permissions.'
-        )}
-        action={
-          <SettingsSegmentedControl<AgentPermissionMode>
-            value={mode}
-            onChange={(nextMode) => {
-              if (nextMode !== 'mixed') {
-                onChange(nextMode)
-              }
-            }}
-            ariaLabel={translate(
-              'auto.components.settings.AgentsPane.agentPermissions',
-              'Agent Permissions'
-            )}
-            size="sm"
-            options={[
-              {
-                value: 'yolo',
-                label: translate('auto.components.settings.AgentsPane.agentPermissionsYolo', 'Yolo')
-              },
-              ...(autoSupported
-                ? [
-                    {
-                      value: 'auto' as const,
-                      label: translate('settings.agents.autoPermissions', 'Auto')
-                    }
-                  ]
-                : []),
-              {
-                value: 'manual',
-                label: translate(
-                  'auto.components.settings.AgentsPane.agentPermissionsManual',
-                  'Manual'
-                )
-              }
-            ]}
-          />
-        }
-      />
-      <p className="text-xs text-muted-foreground">
-        {autoSupported
-          ? translate(
-              'settings.agents.autoPermissionsDescription',
-              'Auto lets Claude, Claude Agent Teams, and Codex review permission requests. Other agents and custom launch arguments stay as configured. Requires a CLI and model that support Auto.'
-            )
-          : translate(
-              'settings.agents.autoPermissionsUpdateHost',
-              'Update this server to configure Auto permissions.'
-            )}
-      </p>
-    </section>
+    <SettingsSubsectionHeader
+      title={translate('auto.components.settings.AgentsPane.agentPermissions', 'Agent Permissions')}
+      description={translate('settings.agents.permissionsScope', 'Defaults for new sessions.')}
+      action={
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              {translate('settings.agents.setAllPermissions', 'Set defaults…')}
+              <ChevronDown className="size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => onChange('manual')}>
+              {translate('settings.agents.setAllManual', 'Manual defaults')}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onChange('yolo')}>
+              {translate('settings.agents.setAllYolo', 'Yolo defaults')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      }
+    />
   )
 }
 

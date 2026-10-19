@@ -85,24 +85,12 @@ describe('host launch settings form', () => {
         </TooltipProvider>
       )
       await screen.findByDisplayValue('--host-marker')
-      const automatic = screen.queryByRole('radio', { name: /^Auto$/ })
+      const control = screen.queryByRole('button', { name: 'Claude permissions' })
+      expect(control !== null).toBe(supported)
       if (supported) {
-        expect(automatic).not.toBeNull()
-        if (!automatic) {
-          throw new Error('Auto control missing')
-        }
-        fireEvent.click(automatic)
-        await waitFor(() =>
-          expect(transport.mutate).toHaveBeenCalledWith(
-            { environmentId: 'ssh-host', pairingRevision: 17 },
-            { type: 'permissions', mode: 'auto' },
-            expect.any(AbortSignal)
-          )
-        )
-      } else {
-        expect(automatic).toBeNull()
-        expect(screen.getByText('Update this server to configure Auto permissions.')).toBeTruthy()
+        expect(control?.hasAttribute('disabled')).toBe(true)
       }
+      expect(screen.queryByRole('radio', { name: /^Auto$/ })).toBeNull()
     }
   )
 
@@ -201,11 +189,7 @@ describe('host launch settings form', () => {
       </TooltipProvider>
     )
     const args = await screen.findByDisplayValue('--host-marker')
-    expect(
-      screen.getByText(
-        'Sets terminal permissions and the default for new chats. Existing chats keep their own permissions.'
-      )
-    ).toBeTruthy()
+    expect(screen.getByText('Defaults for new sessions.')).toBeTruthy()
     expect(screen.queryByDisplayValue('--desktop-marker')).toBeNull()
     fireEvent.change(args, { target: { value: '--r10-marker' } })
     fireEvent.blur(args)
@@ -218,7 +202,8 @@ describe('host launch settings form', () => {
     )
     expect(updateDesktop).not.toHaveBeenCalled()
     expect(desktop.agentDefaultEnv?.claude?.DESKTOP_KEY).toBe('desktop-secret')
-    fireEvent.click(screen.getByRole('radio', { name: 'Manual' }))
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Set defaults…' }), { key: 'Enter' })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Manual defaults' }))
     await waitFor(() =>
       expect(transport.mutate).toHaveBeenCalledWith(
         { environmentId: 'ssh-host', pairingRevision: 17 },

@@ -125,6 +125,32 @@ export function newChatPermissionMode(
   return support ? savedChatPermissionMode(support, setting) : null
 }
 
+/** A scoped agent choice takes precedence over the shared new-chat default. */
+export function newChatPermissionModeForSettings(
+  agent: string,
+  settings:
+    | Partial<Pick<GlobalSettings, 'nativeChatPermissionMode' | 'agentNativeChatPermissionModes'>>
+    | null
+    | undefined
+): AgentChatPermissionMode | null {
+  const overrides = settings?.agentNativeChatPermissionModes
+  const override = overrides && Object.getOwnPropertyDescriptor(overrides, agent)?.value
+  return newChatPermissionMode(agent, override ?? settings?.nativeChatPermissionMode)
+}
+
+export function normalizeAgentNativeChatPermissionModes(
+  value: unknown
+): NonNullable<GlobalSettings['agentNativeChatPermissionModes']> {
+  if (!value || typeof value !== 'object') {
+    return {}
+  }
+  return Object.fromEntries(
+    Object.entries(value).filter(([agent, mode]) =>
+      agentChatPermissionModes(agent)?.modes.some((offered) => offered === mode)
+    )
+  )
+}
+
 /** Seeded once when absent, then stored; an unknown value asks. */
 export function loadedChatPermissionSetting(
   saved: unknown,

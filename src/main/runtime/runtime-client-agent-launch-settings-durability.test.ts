@@ -175,6 +175,27 @@ describe('durable execution-host launch settings', () => {
     expect(readState().settings.nativeChatPermissionMode).toBe('auto')
   })
 
+  it('rolls back a scoped chat default after a failed write and persists a retry', async () => {
+    const { store, authority, readState } = await fixture()
+    const controller = new RuntimeClientSettingsController(store)
+    const beforeArgs = store.getSettings().agentDefaultArgs?.codex
+    const beforeNative = store.getSettings().nativeChatPermissionMode
+    authority.failNextWrite()
+    try {
+      await expect(
+        controller.mutateAgentLaunch({ type: 'permissions', agent: 'codex', mode: 'auto' })
+      ).rejects.toThrow('profile_state_write_failed')
+    } finally {
+      await store.flushPendingOrThrowAsync().catch(() => {})
+    }
+    expect(store.getSettings().agentDefaultArgs?.codex).toBe(beforeArgs)
+    expect(store.getSettings().agentNativeChatPermissionModes).toEqual({})
+    await controller.mutateAgentLaunch({ type: 'permissions', agent: 'codex', mode: 'auto' })
+    expect(readState().settings.agentNativeChatPermissionModes).toEqual({ codex: 'auto' })
+    expect(readState().settings.nativeChatPermissionMode).toBe(beforeNative)
+    expect(readState().settings.agentDefaultArgs.codex).toBe('--approve-for-me')
+  })
+
   it('recomputes queued intents after a failed write instead of persisting its stale map', async () => {
     const { store, authority, readState } = await fixture()
     const controller = new RuntimeClientSettingsController(store)

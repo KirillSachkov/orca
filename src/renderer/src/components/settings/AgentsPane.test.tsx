@@ -506,40 +506,16 @@ describe('AgentsPane', () => {
     expect(matchesSettingsSearch('approve for me', getAgentsPaneSearchEntries())).toBe(true)
   })
 
-  it('applies the selected agent permission mode from settings without a mixed segment', () => {
+  it('keeps automatic permissions out of the bulk action', () => {
     const onChange = vi.fn()
     const element = AgentPermissionsSetting({ mode: 'mixed', onChange })
-    const props: {
-      value: 'mixed'
-      onChange: (value: 'yolo' | 'auto' | 'manual' | 'mixed') => void
-      options: { value: string }[]
-    } = element.props.children[0].props.action.props
-
-    expect(props.value).toBe('mixed')
-    expect(props.options.map((option) => option.value)).toEqual(['yolo', 'auto', 'manual'])
-    props.onChange('mixed')
-    expect(onChange).not.toHaveBeenCalled()
-
-    props.onChange('manual')
-    expect(onChange).toHaveBeenCalledWith('manual')
-  })
-
-  it('selects Auto and hides it on hosts without support', () => {
-    const onChange = vi.fn()
-    const supported = AgentPermissionsSetting({ mode: 'auto', onChange })
-    const control = supported.props.children[0].props.action
-    expect(control.props.value).toBe('auto')
-    control.props.onChange('auto')
-    expect(onChange).toHaveBeenCalledWith('auto')
-
-    const olderHost = AgentPermissionsSetting({ mode: 'manual', onChange, autoSupported: false })
-    expect(
-      olderHost.props.children[0].props.action.props.options.map(
-        (option: { value: string }) => option.value
-      )
-    ).toEqual(['yolo', 'manual'])
-    expect(renderToStaticMarkup(<TooltipProvider>{olderHost}</TooltipProvider>)).toContain(
-      'Update this server to configure Auto permissions.'
+    const items = element.props.action.props.children[1].props.children
+    expect(items).toHaveLength(2)
+    items[0].props.onSelect()
+    items[1].props.onSelect()
+    expect(onChange.mock.calls).toEqual([['manual'], ['yolo']])
+    expect(renderToStaticMarkup(<TooltipProvider>{element}</TooltipProvider>)).toContain(
+      'Set defaults…'
     )
   })
 

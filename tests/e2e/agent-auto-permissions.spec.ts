@@ -3,47 +3,59 @@ import { waitForSessionReady } from './helpers/store'
 
 test.use({ seedTestRepo: false })
 
-test('agent permission presets persist terminal arguments and new native chat defaults', async ({
+test('agent permissions are scoped and persist without a global Auto option', async ({
   orcaPage
 }) => {
   await waitForSessionReady(orcaPage)
   await orcaPage.getByRole('button', { name: 'Settings', exact: true }).click()
   await orcaPage.getByRole('button', { name: 'Agents', exact: true }).click()
-  const permissions = orcaPage.getByRole('radiogroup', { name: 'Agent Permissions', exact: true })
+  const claude = orcaPage.getByRole('button', { name: 'Claude permissions', exact: true })
+  const codex = orcaPage.getByRole('button', { name: 'Codex permissions', exact: true })
+  await expect(orcaPage.getByRole('radiogroup', { name: 'Agent Permissions' })).toHaveCount(0)
+  await expect(orcaPage.getByRole('button', { name: 'OpenClaude permissions' })).toHaveCount(0)
 
-  for (const [label, claude, codex, chat] of [
-    ['Auto', '--permission-mode auto', '--approve-for-me', 'auto'],
-    ['Manual', '', '', 'ask'],
-    [
-      'Yolo',
-      '--dangerously-skip-permissions',
-      '--dangerously-bypass-approvals-and-sandbox',
-      'full-access'
-    ],
-    ['Auto', '--permission-mode auto', '--approve-for-me', 'auto']
+  await orcaPage.getByRole('button', { name: 'Set defaults…', exact: true }).click()
+  await expect(orcaPage.getByRole('menuitem', { name: /Auto/ })).toHaveCount(0)
+  await orcaPage.getByRole('menuitem', { name: 'Manual defaults', exact: true }).click()
+  await expect(claude).toHaveText('Manual')
+  await expect(codex).toHaveText('Manual')
+
+  for (const [label, args, native] of [
+    ['Auto', '--approve-for-me', 'auto'],
+    ['Yolo', '--dangerously-bypass-approvals-and-sandbox', 'full-access'],
+    ['Manual', '', 'ask'],
+    ['Auto', '--approve-for-me', 'auto']
   ]) {
-    await permissions.getByRole('radio', { name: label, exact: true }).click()
-    await expect(permissions.getByRole('radio', { name: label, exact: true })).toBeChecked()
+    await codex.click()
+    await orcaPage.getByRole('menuitemradio', { name: label, exact: true }).click()
+    await expect(codex).toHaveText(label)
+    await expect(claude).toHaveText('Manual')
     await expect
       .poll(() =>
         orcaPage.evaluate(async () => {
           const settings = await window.api.settings.get()
           return {
             claude: settings.agentDefaultArgs?.claude,
-            teams: settings.agentDefaultArgs?.['claude-agent-teams'],
             codex: settings.agentDefaultArgs?.codex,
-            chat: settings.nativeChatPermissionMode
+            fallback: settings.nativeChatPermissionMode,
+            native: settings.agentNativeChatPermissionModes
           }
         })
       )
-      .toEqual({ claude, teams: claude, codex, chat })
+      .toEqual({ claude: '', codex: args, fallback: 'ask', native: { codex: native } })
   }
 
+  await claude.click()
+  await orcaPage.getByRole('menuitemradio', { name: 'Auto', exact: true }).click()
+  await expect(claude).toHaveText('Auto')
+  await expect(codex).toHaveText('Auto')
   await orcaPage.reload()
+  await orcaPage.waitForFunction(() => Boolean(window.__store))
   await waitForSessionReady(orcaPage)
   await orcaPage.getByRole('button', { name: 'Agents', exact: true }).click()
-  await expect(permissions.getByRole('radio', { name: 'Auto', exact: true })).toBeChecked()
-  await expect(
-    orcaPage.getByText('codex', { exact: false }).filter({ hasText: '--approve-for-me' }).first()
-  ).toBeVisible()
+  await expect(claude).toHaveText('Auto')
+  await expect(codex).toHaveText('Auto')
+  const saved = await orcaPage.evaluate(() => window.api.settings.get())
+  expect(saved.agentNativeChatPermissionModes).toEqual({ codex: 'auto', claude: 'auto' })
+  expect(saved.agentDefaultArgs?.['claude-agent-teams']).toBe('')
 })

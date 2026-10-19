@@ -72,7 +72,10 @@ describe('host agent launch settings transport', () => {
       async (_id, capability) => capability !== AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY
     )
     await expect(
-      mutateHostAgentLaunchSettings({ environmentId: 'old' }, { type: 'permissions', mode: 'auto' })
+      mutateHostAgentLaunchSettings(
+        { environmentId: 'old' },
+        { type: 'permissions', agent: 'codex', mode: 'auto' }
+      )
     ).rejects.toThrow('agent_launch_auto_permissions_unsupported')
     expect(rpc.call).not.toHaveBeenCalled()
     await mutateHostAgentLaunchSettings(
@@ -82,12 +85,29 @@ describe('host agent launch settings transport', () => {
     expect(rpc.call).toHaveBeenCalledOnce()
   })
 
+  it('keeps scoped Manual out of an older host strict schema too', async () => {
+    rpc.supports.mockImplementation(
+      async (_id, capability) => capability !== AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY
+    )
+    await expect(
+      mutateHostAgentLaunchSettings(
+        { environmentId: 'old' },
+        { type: 'permissions', agent: 'codex', mode: 'manual' }
+      )
+    ).rejects.toThrow('unsupported')
+    expect(rpc.call).not.toHaveBeenCalled()
+  })
+
   it('sends automatic permissions only to a host that advertises support', async () => {
     await mutateHostAgentLaunchSettings(
       { environmentId: 'new' },
-      { type: 'permissions', mode: 'auto' }
+      { type: 'permissions', agent: 'codex', mode: 'auto' }
     )
     expect(rpc.supports).toHaveBeenCalledWith('new', AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY)
-    expect(rpc.call.mock.calls[0]?.[2]).toEqual({ type: 'permissions', mode: 'auto' })
+    expect(rpc.call.mock.calls[0]?.[2]).toEqual({
+      type: 'permissions',
+      agent: 'codex',
+      mode: 'auto'
+    })
   })
 })

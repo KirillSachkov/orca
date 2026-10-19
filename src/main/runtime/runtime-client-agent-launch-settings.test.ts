@@ -131,6 +131,17 @@ describe('execution-host agent launch settings', () => {
     expect(host.nativeChatPermissionMode).toBe('auto')
   })
 
+  it('publishes scoped host defaults and resets them when a paired client chooses a shared chat default', async () => {
+    const { controller, host } = fixture()
+    host.agentDefaultArgs = { claude: '', codex: '' }
+    await controller.mutateAgentLaunch({ type: 'permissions', agent: 'codex', mode: 'auto' })
+    expect(controller.get().agentNativeChatPermissionModes).toEqual({ codex: 'auto' })
+    expect(host.agentDefaultArgs.claude).toBe('')
+    await controller.update({ nativeChatPermissionMode: 'ask' })
+    expect(controller.get().agentNativeChatPermissionModes).toEqual({})
+    expect(host.nativeChatPermissionMode).toBe('ask')
+  })
+
   it('normalizes older-client None default requests to Blank Terminal', async () => {
     const { controller, host } = fixture()
     const mutation = AgentLaunchSettingsMutation.parse({

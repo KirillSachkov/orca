@@ -61,6 +61,7 @@ export const AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY = 'agent.launch.tab-close
 
 export const AGENT_LAUNCH_SETTINGS_CAPABILITY = 'settings.agent-launch.v1' as const
 
+// Host accepts scoped permission mutations and seeds matching per-agent native chat defaults.
 export const AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY =
   'settings.agent-launch.auto-permissions.v1' as const
 

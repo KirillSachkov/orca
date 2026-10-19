@@ -4,7 +4,12 @@ import type {
   AgentLaunchSettingsMutation
 } from '../../../../shared/agent-launch-settings'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { AgentPermissionMode } from '../../../../shared/tui-agent-permissions'
+import {
+  AUTO_TUI_AGENT_ARGS,
+  resolveTuiAgentPermissionMode,
+  type AgentPermissionMode
+} from '../../../../shared/tui-agent-permissions'
+import { AgentRowPermissionControl } from './AgentRowPermissionControl'
 import {
   getTuiAgentDefaultArgs,
   getTuiAgentDefaultEnv,
@@ -81,6 +86,18 @@ export function AgentLaunchSettingsCatalog({
     cmdOverride: isDetected ? settings.agentCmdOverrides[agent.id] : undefined,
     argsOverride: resolveTuiAgentLaunchArgs(agent.id, settings.agentDefaultArgs),
     envOverride: local ? resolveTuiAgentLaunchEnv(agent.id, local.settings.agentDefaultEnv) : {},
+    permissionControl:
+      isDetected && autoSupported && agent.id in AUTO_TUI_AGENT_ARGS ? (
+        <AgentRowPermissionControl
+          label={agent.label}
+          mode={resolveTuiAgentPermissionMode({
+            agent: agent.id,
+            agentArgs: resolveTuiAgentLaunchArgs(agent.id, settings.agentDefaultArgs)
+          })}
+          autoSupported={agent.id in AUTO_TUI_AGENT_ARGS}
+          onChange={(mode) => save({ type: 'permissions', agent: agent.id, mode })}
+        />
+      ) : undefined,
     onSetDefault: () =>
       save({
         type: 'default',

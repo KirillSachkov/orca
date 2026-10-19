@@ -144,6 +144,7 @@ export function resolveAgentPermissionModeSummary(args: {
 
 export function applyAgentPermissionMode(args: {
   mode: Exclude<AgentPermissionMode, 'mixed'>
+  agent?: TuiAgent
   agentDefaultArgs?: Partial<Record<TuiAgent, string>> | null
   agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>> | null
 }): {
@@ -153,7 +154,8 @@ export function applyAgentPermissionMode(args: {
   const nextArgs = { ...args.agentDefaultArgs }
   const nextEnv = { ...args.agentDefaultEnv }
 
-  for (const agent of PERMISSION_AGENT_IDS) {
+  const agents = args.agent ? [args.agent] : PERMISSION_AGENT_IDS
+  for (const agent of agents) {
     const autoArgs = AUTO_TUI_AGENT_ARGS[agent]
     if (args.mode === 'auto' && !autoArgs) {
       continue

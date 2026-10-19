@@ -192,7 +192,7 @@
   "settings": {
     "chat": {
       "permissionsTitle": "Permissions for new chats",
-      "permissionsDescription": "Applies to new chats only. Agents you open in a terminal use Settings → Agents → Agent Permissions.",
+      "permissionsDescription": "New chats only. Agent-specific defaults are in Settings → Agents.",
       "description": "Choose how chats look and behave.",
       "names": {
         "title": "Chat names",
@@ -387,10 +387,14 @@
       "hostDefaults": "Defaults for new agents on the selected host.",
       "save": "Save",
       "clearDefault": "Clear default agent",
-      "permissionsPresetDescription": "Sets terminal permissions and the default for new chats. Existing chats keep their own permissions.",
       "autoPermissions": "Auto",
-      "autoPermissionsDescription": "Auto lets Claude, Claude Agent Teams, and Codex review permission requests. Other agents and custom launch arguments stay as configured. Requires a CLI and model that support Auto.",
-      "autoPermissionsUpdateHost": "Update this server to configure Auto permissions."
+      "rowPermissions": "Permissions",
+      "rowPermissionsLabel": "{{agent}} permissions",
+      "customPermissions": "Custom arguments",
+      "permissionsScope": "Defaults for new sessions.",
+      "setAllPermissions": "Set defaults…",
+      "setAllManual": "Manual defaults",
+      "setAllYolo": "Yolo defaults"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
