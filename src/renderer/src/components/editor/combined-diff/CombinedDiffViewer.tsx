@@ -208,7 +208,8 @@ export default function CombinedDiffViewer({
       sections,
       sectionsRef: registry.sectionsRef,
       setSectionHeights,
-      setSections
+      setSections,
+      requestSectionReload
     })
 
   useCombinedDiffViewPersist({

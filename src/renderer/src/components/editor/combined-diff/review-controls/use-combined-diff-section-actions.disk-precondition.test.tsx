@@ -47,6 +47,7 @@ function unstagedSection(loadedDisk: string): DiffSection {
 
 function renderSectionActions(section: DiffSection) {
   const setSections = vi.fn()
+  const requestSectionReload = vi.fn()
   const { result } = renderHook(() =>
     useCombinedDiffSectionActions({
       activeGroupId: undefined,
@@ -61,13 +62,24 @@ function renderSectionActions(section: DiffSection) {
       sections: [section],
       sectionsRef: { current: [section] },
       setSectionHeights: vi.fn(),
-      setSections
+      setSections,
+      requestSectionReload
     })
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the save path calls only getValue.
   const editor = { getValue: () => 'mine' } as monacoEditor.IStandaloneCodeEditor
   result.current.modifiedEditorsRef.current.set(0, editor)
-  return { result, setSections }
+  return { result, setSections, requestSectionReload }
+}
+
+type RefusalToastOptions = {
+  action: { label: string; onClick: () => void }
+  cancel: { label: string; onClick: () => void }
+}
+
+function refusalToastOptions(): RefusalToastOptions {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the refusal toast always passes both buttons.
+  return mocks.toastError.mock.calls[0]?.[1] as RefusalToastOptions
 }
 
 describe('combined diff section save precondition', () => {
@@ -97,7 +109,42 @@ describe('combined diff section save precondition', () => {
 
     expect(setSections).not.toHaveBeenCalled()
     expect(mocks.toastError).toHaveBeenCalledWith(
-      'This file changed on disk. Review the change before saving.'
+      'This file changed on disk. Review the change before saving.',
+      expect.objectContaining({ action: expect.anything(), cancel: expect.anything() })
     )
+  })
+
+  it('lets the user resolve a refused section save by overwriting', async () => {
+    mocks.writeRuntimeFile
+      .mockResolvedValueOnce({ ok: false, diskConflict: 'changed' })
+      .mockResolvedValueOnce({ ok: true })
+    const { result } = renderSectionActions(unstagedSection('loaded disk'))
+    await act(() => result.current.handleSectionSaveRef.current(0))
+
+    expect(refusalToastOptions().action.label).toBe('Overwrite')
+    await act(async () => refusalToastOptions().action.onClick())
+
+    expect(mocks.writeRuntimeFile).toHaveBeenCalledTimes(2)
+    expect(mocks.writeRuntimeFile.mock.calls[1]?.[4]).toBeUndefined()
+  })
+
+  it('lets the user resolve a refused section save by reloading the section', async () => {
+    vi.useFakeTimers()
+    try {
+      mocks.writeRuntimeFile.mockResolvedValue({ ok: false, diskConflict: 'changed' })
+      const { result, setSections, requestSectionReload } = renderSectionActions(
+        unstagedSection('loaded disk')
+      )
+      await act(() => result.current.handleSectionSaveRef.current(0))
+
+      expect(refusalToastOptions().cancel.label).toBe('Reload')
+      act(() => refusalToastOptions().cancel.onClick())
+      await act(() => vi.runAllTimersAsync())
+
+      expect(setSections).toHaveBeenCalled()
+      expect(requestSectionReload).toHaveBeenCalledWith(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

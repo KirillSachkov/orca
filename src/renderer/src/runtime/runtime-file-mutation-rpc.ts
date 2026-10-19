@@ -35,7 +35,9 @@ export async function assertRuntimeFileMutationCapability(
   return (await getRuntimeFileMutationStatus(target, expectedEnvironmentPairingRevision)).runtimeId
 }
 
-export type RuntimeFileMutationPlan<TResult> = { params: unknown } | { result: TResult }
+export type RuntimeFileMutationPlan<TResult> =
+  | { method?: string; params: unknown }
+  | { result: TResult }
 
 /**
  * `plan` sees the ownership probe's capabilities, so a capability-gated field costs no extra status
@@ -55,7 +57,7 @@ export async function callRuntimeFileMutationWithCapabilities<TResult>(
   if ('result' in planned) {
     return planned.result
   }
-  return callRuntimeRpc<TResult>(target, method, planned.params, {
+  return callRuntimeRpc<TResult>(target, planned.method ?? method, planned.params, {
     timeoutMs,
     expectedEnvironmentPairingRevision: requestRevision,
     expectedEnvironmentRuntimeId: status.runtimeId,

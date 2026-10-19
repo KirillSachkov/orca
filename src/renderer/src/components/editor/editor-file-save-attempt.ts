@@ -19,7 +19,7 @@ export function saveRefusalNotice(diskConflict: FileWriteDiskConflict): string {
       )
 }
 
-function saveFailureNotice(error: unknown): string {
+export function editorSaveFailureNotice(error: unknown): string {
   // Why: the save event bridge forwards only the message, so a disk refusal is recognized by it.
   const message = error instanceof Error ? error.message : String(error)
   if (message === SAVE_REFUSED_CHANGED_ON_DISK_MESSAGE) {
@@ -41,7 +41,7 @@ export async function attemptEditorFileSave(target: EditorSaveFileTarget): Promi
   } catch (error) {
     // Why: shortcut handlers need a non-throwing result, while dependent actions must not treat a rejected write as success.
     console.error('[editor] file save failed', error)
-    toast.error(saveFailureNotice(error))
+    toast.error(editorSaveFailureNotice(error))
     return false
   }
 }

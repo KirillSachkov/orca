@@ -75,7 +75,7 @@ function serveHost(options: {
 function writeCalls(): RuntimeRpcRequest[] {
   return runtimeEnvironmentCall.mock.calls
     .map(([args]) => args)
-    .filter((args) => args.method === 'files.write')
+    .filter((args) => args.method === 'files.write' || args.method === 'files.writeIfUnchanged')
 }
 
 describe('writeRuntimeFile disk precondition', () => {
@@ -94,6 +94,29 @@ describe('writeRuntimeFile disk precondition', () => {
     expect(fsWriteFile).toHaveBeenCalledWith(
       expect.objectContaining({ diskPrecondition: precondition })
     )
+  })
+
+  it('cannot write through an older server reached after a supporting server was probed', async () => {
+    // The shared socket reconnected to an older server between the capability verdict and the send.
+    serveHost({ enforcesPrecondition: true })
+    const unguardedWrites: RuntimeRpcRequest[] = []
+    runtimeEnvironmentCall.mockImplementation((args: RuntimeRpcRequest) => {
+      if (args.method === 'files.write') {
+        unguardedWrites.push(args)
+        return Promise.resolve(rpcOk({ ok: true }))
+      }
+      return Promise.resolve({
+        id: 'rpc',
+        ok: false,
+        error: { code: 'method_not_found', message: `Unknown method: ${args.method}` },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    })
+
+    await expect(
+      writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, precondition)
+    ).rejects.toThrow()
+    expect(unguardedWrites).toHaveLength(0)
   })
 
   it('lets a host that enforces the precondition compare at write time', async () => {

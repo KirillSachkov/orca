@@ -4,6 +4,7 @@ import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store'
 import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
+  ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
   requestEditorFileSave,
   type EditorPathMutationTarget
 } from './editor-autosave'
@@ -16,6 +17,7 @@ import {
 } from './editor-autosave-controller-test-fixture'
 import { getDiskBaselineSignature } from './diff-content-signature'
 import { keepTabEditsOverExternalChange } from './ExternalFileChangeBanner'
+import { SAVE_REFUSED_CHANGED_ON_DISK_MESSAGE } from './editor-save-disk-precondition'
 import type * as RuntimeFileReadClient from '@/runtime/runtime-file-read-client'
 
 const mocks = vi.hoisted(() => {
@@ -82,6 +84,54 @@ describe('editor save overwrite consent', () => {
 
       await requestEditorFileSave({ fileId: FILE_PATH, confirmDiskOverwrite: true })
       expect(disk.files.get(FILE_PATH)).toBe('mine')
+    } finally {
+      cleanup()
+    }
+  })
+
+  it("treats the close dialog's Save under the banner as the overwrite choice", async () => {
+    const { disk, store } = setUp('agent rewrite', 'original', 'mine')
+    // Closing touches the tab model, so seed its empty maps.
+    store.setState({
+      settings: null,
+      browserTabsByWorktree: {},
+      tabsByWorktree: {},
+      activeBrowserTabIdByWorktree: {},
+      unifiedTabsByWorktree: {}
+    })
+    store.getState().setExternalMutation(FILE_PATH, 'changed')
+    const onSaveFailed = vi.fn()
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      window.dispatchEvent(
+        new CustomEvent(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, {
+          detail: { fileId: FILE_PATH, onSaveFailed }
+        })
+      )
+      await vi.waitFor(() => expect(editTab(store)).toBeUndefined())
+      expect(disk.files.get(FILE_PATH)).toBe('mine')
+      expect(onSaveFailed).not.toHaveBeenCalled()
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('reports a close-dialog save refused over an unnoticed change right away', async () => {
+    const { disk, store } = setUp('agent rewrite', 'original', 'mine')
+    store.setState({ settings: null })
+    const onSaveFailed = vi.fn()
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      window.dispatchEvent(
+        new CustomEvent(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, {
+          detail: { fileId: FILE_PATH, onSaveFailed }
+        })
+      )
+      await vi.waitFor(() =>
+        expect(onSaveFailed).toHaveBeenCalledWith(SAVE_REFUSED_CHANGED_ON_DISK_MESSAGE)
+      )
+      expect(disk.files.get(FILE_PATH)).toBe('agent rewrite')
+      expect(editTab(store)).toBeDefined()
     } finally {
       cleanup()
     }

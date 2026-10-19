@@ -2,15 +2,33 @@
 // (issue #7265), where a hash collision means a missed conflict — so it gets
 // two independent FNV lanes plus the length instead of a single 32-bit lane.
 export function getDiskBaselineSignature(content: string): string {
-  let hashA = 2166136261
-  let hashB = 84696351
-  for (let i = 0; i < content.length; i += 1) {
-    const code = content.charCodeAt(i)
-    hashA ^= code
-    hashA = Math.imul(hashA, 16777619)
-    hashB = Math.imul(hashB ^ code, 1099511627)
+  return new DiskBaselineSignatureBuilder().update(content).digest()
+}
+
+/** The same signature fed in pieces, so a large file can be hashed between yields. */
+export class DiskBaselineSignatureBuilder {
+  private hashA = 2166136261
+  private hashB = 84696351
+  private length = 0
+
+  update(chunk: string): this {
+    let hashA = this.hashA
+    let hashB = this.hashB
+    for (let i = 0; i < chunk.length; i += 1) {
+      const code = chunk.charCodeAt(i)
+      hashA ^= code
+      hashA = Math.imul(hashA, 16777619)
+      hashB = Math.imul(hashB ^ code, 1099511627)
+    }
+    this.hashA = hashA
+    this.hashB = hashB
+    this.length += chunk.length
+    return this
   }
-  return `${(hashA >>> 0).toString(16)}-${(hashB >>> 0).toString(16)}-${content.length.toString(16)}`
+
+  digest(): string {
+    return `${(this.hashA >>> 0).toString(16)}-${(this.hashB >>> 0).toString(16)}-${this.length.toString(16)}`
+  }
 }
 
 /** UTF-16 length a disk baseline signature was taken over, or null when it is not one. */

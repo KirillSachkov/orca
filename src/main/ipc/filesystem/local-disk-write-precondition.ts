@@ -1,4 +1,7 @@
+import { StringDecoder } from 'node:string_decoder'
 import {
+  DiskBaselineSignatureBuilder,
+  getDiskBaselineSignature,
   diskBaselineSignatureLength,
   utf8ByteSizeCanDecodeToLength
 } from '../../../shared/disk-baseline-signature'
@@ -10,8 +13,8 @@ import {
   type FileWriteResult
 } from '../../../shared/file-write-disk-precondition'
 import { isENOENT } from '../filesystem-path-containment'
-import { writeFile } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { stat, writeFile } from 'node:fs/promises'
+import { basename, dirname, join, normalize } from 'node:path'
 import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
 import { serializedParentDirectoryKey } from '../../destination-serialized-local-rename'
 import {
@@ -19,6 +22,22 @@ import {
   openLocalRegularFile,
   readLocalFileBounded
 } from './local-regular-file-read'
+
+const HASH_SLICE_BYTES = 1024 * 1024
+
+/** Why sliced: hashing tens of MB in one go stalls the main process; yielding keeps windows responsive. */
+export async function diskSignatureOfUtf8(buffer: Buffer): Promise<string> {
+  if (buffer.length <= HASH_SLICE_BYTES) {
+    return getDiskBaselineSignature(buffer.toString('utf8'))
+  }
+  const decoder = new StringDecoder('utf8')
+  const signature = new DiskBaselineSignatureBuilder()
+  for (let offset = 0; offset < buffer.length; offset += HASH_SLICE_BYTES) {
+    signature.update(decoder.write(buffer.subarray(offset, offset + HASH_SLICE_BYTES)))
+    await new Promise<void>((resolve) => setImmediate(resolve))
+  }
+  return signature.update(decoder.end()).digest()
+}
 
 /** Reads the file the writer is about to replace and reports why it no longer matches the baseline. */
 export async function checkLocalDiskWritePrecondition(
@@ -51,7 +70,7 @@ export async function checkLocalDiskWritePrecondition(
       }
       throw error
     }
-    return compareDiskWritePrecondition(precondition, buffer.toString('utf8'))
+    return (await diskSignatureOfUtf8(buffer)) === precondition.expectedSignature ? null : 'changed'
   } finally {
     await handle.close()
   }
@@ -60,14 +79,25 @@ export async function checkLocalDiskWritePrecondition(
 const editorWritesByFile = new Map<string, Promise<void>>()
 
 /**
- * One file's lock key: its real parent folder plus a case- and Unicode-folded name. Why fold
- * everywhere: an alias the filesystem would distinguish only over-serializes, never races.
+ * One file's lock key. An existing file is keyed by its inode (stat follows symlinks), so symlink
+ * and hardlink aliases share a lock. A missing file is keyed by its real parent plus a case- and
+ * Unicode-folded name; folding where the filesystem distinguishes names only over-serializes.
  */
 async function editorWriteLockKey(filePath: string): Promise<string> {
-  return join(
-    await serializedParentDirectoryKey(filePath),
-    basename(filePath).normalize('NFC').toLowerCase()
-  )
+  try {
+    const stats = await stat(filePath, { bigint: true })
+    return `inode:${stats.dev}:${stats.ino}`
+  } catch {
+    // Missing, or unreadable metadata: fall back to the path.
+  }
+  let parentKey: string
+  try {
+    parentKey = await serializedParentDirectoryKey(filePath)
+  } catch {
+    // Why: the key only orders saves; a volume that can't resolve real paths must still save.
+    parentKey = normalize(dirname(filePath))
+  }
+  return `path:${join(parentKey, basename(filePath).normalize('NFC').toLowerCase())}`
 }
 
 /**

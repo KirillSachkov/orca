@@ -9,7 +9,7 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
-describe('files.write disk precondition', () => {
+describe('files.writeIfUnchanged', () => {
   it('forwards a save disk precondition to the runtime writer', async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher reaches only the two stubbed members.
     const runtime = {
@@ -20,7 +20,7 @@ describe('files.write disk precondition', () => {
     const diskPrecondition = { expectedSignature: 'a-b-1', allowMissing: true }
 
     const response = await dispatcher.dispatch(
-      makeRequest('files.write', {
+      makeRequest('files.writeIfUnchanged', {
         worktree: 'id:wt-1',
         relativePath: 'src/index.ts',
         content: 'export {}',

@@ -48,6 +48,12 @@ export type EditorSaveFileDetail = EditorSaveFileTarget & {
   reject: (message: string) => void
 }
 
+export type EditorSaveAndCloseDetail = {
+  fileId: string
+  /** Called with the reason when the save fails, so the dialog doesn't wait out its timeout. */
+  onSaveFailed?: (message: string) => void
+}
+
 export type EditorFileSavedDetail = {
   fileId: string
   content: string

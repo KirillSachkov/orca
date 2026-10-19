@@ -24,13 +24,16 @@ export const FileMutationOpen = FileOpen.extend({
 export const FileWrite = FileMutationOpen.extend({
   content: z
     .unknown()
-    .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' }),
-  diskPrecondition: z
-    .object({
-      expectedSignature: z.string().min(1).max(64),
-      allowMissing: z.boolean().optional()
-    })
-    .optional()
+    .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
+})
+
+// Why a separate method: a host too old to honor the precondition answers method_not_found
+// instead of silently dropping the field and writing over newer disk content.
+export const FileWriteIfUnchanged = FileWrite.extend({
+  diskPrecondition: z.object({
+    expectedSignature: z.string().min(1).max(64),
+    allowMissing: z.boolean().optional()
+  })
 })
 
 export const FileWriteBase64 = FileMutationOpen.extend({

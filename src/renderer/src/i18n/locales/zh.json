@@ -16077,7 +16077,9 @@
             },
             "refused": {
               "changedOnDisk": "此文件已在磁盘上更改。请先查看更改再保存。",
-              "deletedOnDisk": "此文件已在磁盘上删除。"
+              "deletedOnDisk": "此文件已在磁盘上删除。",
+              "overwrite": "覆盖",
+              "reload": "重新加载"
             }
           }
         },

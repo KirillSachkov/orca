@@ -6,6 +6,7 @@ import {
   FileMutationOpen,
   FileRename,
   FileWrite,
+  FileWriteIfUnchanged,
   FileWriteBase64,
   FileWriteBase64Chunk
 } from '../../../../shared/rpc-contract/files-mutation-params'
@@ -38,16 +39,20 @@ export const FILE_MUTATION_METHODS = [
     name: 'files.write',
     permission: 'workspace',
     params: FileWrite,
-    handler: async (params, { runtime }) => {
-      if (!params.diskPrecondition) {
-        return runtime.writeFileExplorerFile(
-          params.worktree,
-          params.relativePath,
-          params.content,
-          ...sshMutationArguments(params)
-        )
-      }
-      return runtime.writeFileExplorerFile(
+    handler: async (params, { runtime }) =>
+      runtime.writeFileExplorerFile(
+        params.worktree,
+        params.relativePath,
+        params.content,
+        ...sshMutationArguments(params)
+      )
+  }),
+  defineMethod({
+    name: 'files.writeIfUnchanged',
+    permission: 'workspace',
+    params: FileWriteIfUnchanged,
+    handler: async (params, { runtime }) =>
+      runtime.writeFileExplorerFile(
         params.worktree,
         params.relativePath,
         params.content,
@@ -56,7 +61,6 @@ export const FILE_MUTATION_METHODS = [
         params.expectedExecutionHostId,
         params.diskPrecondition
       )
-    }
   }),
   defineMethod({
     name: 'files.writeBase64',

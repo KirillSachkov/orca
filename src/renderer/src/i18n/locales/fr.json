@@ -16171,7 +16171,9 @@
             },
             "refused": {
               "changedOnDisk": "Ce fichier a été modifié sur le disque. Vérifiez la modification avant d'enregistrer.",
-              "deletedOnDisk": "Ce fichier a été supprimé du disque."
+              "deletedOnDisk": "Ce fichier a été supprimé du disque.",
+              "overwrite": "Écraser",
+              "reload": "Recharger"
             }
           }
         },

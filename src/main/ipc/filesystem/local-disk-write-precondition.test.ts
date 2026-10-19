@@ -1,12 +1,16 @@
-import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { link, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 import type { RuntimeStore } from '../../runtime/runtime-store-contract'
 import { createLocalFilesystemProvider } from '../../providers/local-filesystem-provider'
-import { checkLocalDiskWritePrecondition } from './local-disk-write-precondition'
+import {
+  checkLocalDiskWritePrecondition,
+  diskSignatureOfUtf8
+} from './local-disk-write-precondition'
 import type * as LocalRegularFileRead from './local-regular-file-read'
+import type * as NodeFsPromises from 'node:fs/promises'
 
 const fileRead = vi.hoisted(() => {
   const state: { understateSizeBy: number; hangPath: string | null } = {
@@ -14,6 +18,23 @@ const fileRead = vi.hoisted(() => {
     hangPath: null
   }
   return state
+})
+const realpathFailure = vi.hoisted(() => {
+  const state: { path: string | null } = { path: null }
+  return state
+})
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
+  return {
+    ...actual,
+    // Why: some volumes (RAM disks, subst and network drives, WSL UNC) fail realpath outright.
+    realpath: async (path: string) => {
+      if (path === realpathFailure.path) {
+        throw Object.assign(new Error(`EIO: i/o error, realpath '${path}'`), { code: 'EIO' })
+      }
+      return actual.realpath(path)
+    }
+  }
 })
 vi.mock('./local-regular-file-read', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalRegularFileRead>()
@@ -41,6 +62,7 @@ beforeEach(async () => {
 afterEach(async () => {
   fileRead.understateSizeBy = 0
   fileRead.hangPath = null
+  realpathFailure.path = null
   await rm(base, { recursive: true, force: true })
 })
 
@@ -104,6 +126,19 @@ describe('checkLocalDiskWritePrecondition', () => {
   })
 })
 
+describe('sliced disk hashing', () => {
+  it('matches the whole-file signature across slice boundaries and invalid bytes', async () => {
+    const slice = 1024 * 1024
+    // A 4-byte character straddles the first slice edge, followed by bytes that are not UTF-8.
+    const text = Buffer.from(`${'a'.repeat(slice - 2)}𝄞 tail é`, 'utf8')
+    const buffer = Buffer.concat([text, Buffer.from([0xff, 0xc3, 0x28, 0xe2, 0x82]), text])
+
+    await expect(diskSignatureOfUtf8(buffer)).resolves.toBe(
+      getDiskBaselineSignature(buffer.toString('utf8'))
+    )
+  })
+})
+
 describe('local provider guarded write', () => {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the write path reads nothing from the store; authorization is the injected stub.
   const store = {} as RuntimeStore
@@ -145,6 +180,41 @@ describe('local provider guarded write', () => {
     const winner = results.findIndex((result) => result.ok)
     expect(results[1 - winner]).toEqual({ ok: false, diskConflict: 'changed' })
     expect(await readFile(filePath, 'utf8')).toBe(winner === 0 ? 'client one' : 'client two')
+  })
+
+  // Why: creating symlinks needs elevated rights on Windows runners.
+  it.skipIf(process.platform === 'win32').each([
+    ['a symlink', (target: string, alias: string) => symlink(target, alias)],
+    ['a hardlink', (target: string, alias: string) => link(target, alias)]
+  ])(
+    'lets only one save win when two clients reach one file through %s',
+    async (_label, makeAlias) => {
+      const target = join(base, 'target.ts')
+      const alias = join(base, 'alias.ts')
+      await writeFile(target, 'original')
+      await makeAlias(target, alias)
+      const fromBaseline = { expectedSignature: getDiskBaselineSignature('original') }
+
+      const results = await Promise.all([
+        provider().writeFileWithDiskPrecondition(target, 'through target', fromBaseline),
+        provider().writeFileWithDiskPrecondition(alias, 'through alias', fromBaseline)
+      ])
+
+      expect(results.filter((result) => result.ok)).toHaveLength(1)
+    }
+  )
+
+  it('still saves where the folder cannot be resolved to a real path', async () => {
+    const filePath = join(base, 'new.ts')
+    realpathFailure.path = base
+
+    await expect(
+      provider().writeFileWithDiskPrecondition(filePath, 'created', {
+        expectedSignature: getDiskBaselineSignature('anything'),
+        allowMissing: true
+      })
+    ).resolves.toEqual({ ok: true })
+    expect(await readFile(filePath, 'utf8')).toBe('created')
   })
 
   it('does not hold up a save to another file in the folder behind a stuck read', async () => {

@@ -15,8 +15,7 @@ import { getLargeDiffRenderLimit } from '../../large-diff-render-limit'
 import { getStoredTextDiffContent, getStoredTextDiffResult } from '../../large-diff-section-content'
 import { removeDiffSectionMeasuredHeight } from '../../diff-section-height-cache'
 import { combinedDiffSectionDiskPrecondition } from '../../working-file-diff-disk-baseline'
-import { saveRefusalNotice } from '../../editor-file-save-attempt'
-import { toast } from 'sonner'
+import { discardSectionEdits, notifySectionSaveRefused } from './combined-diff-section-save-refusal'
 import type { DiffSection } from '../../diff-section-types'
 import type { DiffSectionItemProps } from '../../diff-section-item-props'
 
@@ -39,7 +38,8 @@ export function useCombinedDiffSectionActions({
   sections,
   sectionsRef,
   setSectionHeights,
-  setSections
+  setSections,
+  requestSectionReload
 }: {
   activeGroupId: string | undefined
   branchCompare: NonNullable<OpenFile['branchCompare']> | null
@@ -53,6 +53,7 @@ export function useCombinedDiffSectionActions({
   sectionsRef: React.RefObject<DiffSection[]>
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
+  requestSectionReload: (index: number) => void
 }): CombinedDiffSectionActions {
   const openFile = useAppStore((s) => s.openFile)
   const openBranchDiff = useAppStore((s) => s.openBranchDiff)
@@ -156,7 +157,7 @@ export function useCombinedDiffSectionActions({
   )
 
   const handleSectionSave = useCallback(
-    async (index: number) => {
+    async (index: number, overwriteDisk = false): Promise<void> => {
       const section = sections[index]
       if (!section) {
         return
@@ -187,11 +188,29 @@ export function useCombinedDiffSectionActions({
           absolutePath,
           content,
           undefined,
-          combinedDiffSectionDiskPrecondition(section)
+          overwriteDisk ? undefined : combinedDiffSectionDiskPrecondition(section)
         )
         if (!writeResult.ok) {
-          // Why: the section keeps its edits; the reload that follows an external change shows the newer disk.
-          toast.error(saveRefusalNotice(writeResult.diskConflict))
+          const currentIndex = (): number =>
+            sectionsRef.current.findIndex((s) => s.key === sectionKey)
+          notifySectionSaveRefused(writeResult.diskConflict, {
+            overwrite: () => {
+              const i = currentIndex()
+              if (i !== -1) {
+                void handleSectionSave(i, true)
+              }
+            },
+            reload: () => {
+              discardSectionEdits(setSections, sectionKey)
+              // Why: after the clean state commits, or the reload skips the still-dirty section.
+              window.setTimeout(() => {
+                const i = currentIndex()
+                if (i !== -1) {
+                  requestSectionReload(i)
+                }
+              }, 0)
+            }
+          })
           return
         }
         // Why: the section list can be rebuilt while the write is pending, so re-resolve
@@ -245,7 +264,8 @@ export function useCombinedDiffSectionActions({
       sections,
       sectionsRef,
       setSectionHeights,
-      setSections
+      setSections,
+      requestSectionReload
     ]
   )
 

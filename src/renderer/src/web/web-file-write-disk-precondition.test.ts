@@ -47,7 +47,7 @@ describe('paired web client save precondition', () => {
       diskPrecondition: precondition
     })
 
-    expect(calledMethods()).toEqual(['files.write'])
+    expect(calledMethods()).toEqual(['files.writeIfUnchanged'])
     expect(callRuntimeResult.mock.calls[0]?.[1]).toMatchObject({ diskPrecondition: precondition })
   })
 

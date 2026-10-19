@@ -19,6 +19,7 @@ import { localAccess } from './runtime-file-read-client'
 import { REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES } from '../../../shared/remote-runtime-memory-limits'
 import {
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
+  FILE_WRITE_IF_UNCHANGED_METHOD,
   FILE_WRITE_OK,
   parseFileWriteResult,
   type FileWriteDiskPrecondition,
@@ -97,7 +98,7 @@ export async function writeRuntimeFile(
       'files.write',
       async (capabilities) => {
         if (capabilities.includes(FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY)) {
-          return { params: { ...params, diskPrecondition } }
+          return { method: FILE_WRITE_IF_UNCHANGED_METHOD, params: { ...params, diskPrecondition } }
         }
         const diskConflict = await checkDiskPreconditionFromClient(
           { ...context, target: remoteArgs.target },

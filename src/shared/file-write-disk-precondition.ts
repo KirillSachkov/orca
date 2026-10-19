@@ -1,8 +1,10 @@
-import { getDiskBaselineSignature } from './disk-baseline-signature'
+import { getDiskBaselineSignature, getWrittenContentDiskSignature } from './disk-baseline-signature'
 
-// Why: an older host strips the precondition and writes blindly, so a client must know before it sends.
+// Why: the host serves `files.writeIfUnchanged`; without it a client compares from its side first.
 export const FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY =
   'files.write.disk-precondition.v1' as const
+
+export const FILE_WRITE_IF_UNCHANGED_METHOD = 'files.writeIfUnchanged'
 
 /** Refuse the write unless disk still holds the content this signature was taken over. */
 export type FileWriteDiskPrecondition = {
@@ -71,4 +73,19 @@ export function diskConflictFromReadFailure(
     return 'changed'
   }
   throw error
+}
+
+/** For writers that create or restore a file: write only where none exists or it already holds `content`. */
+export function missingOrIdenticalPrecondition(content: string): FileWriteDiskPrecondition {
+  return { expectedSignature: getWrittenContentDiskSignature(content), allowMissing: true }
+}
+
+export const FILE_ALREADY_EXISTS_DIFFERENTLY_MESSAGE =
+  'A different file already exists at this path, so it was left unchanged.'
+
+/** Turns a refusal into the error a caller's existing failure path already reports. */
+export function assertFileWriteApplied(result: FileWriteResult): void {
+  if (!result.ok) {
+    throw new Error(FILE_ALREADY_EXISTS_DIFFERENTLY_MESSAGE)
+  }
 }

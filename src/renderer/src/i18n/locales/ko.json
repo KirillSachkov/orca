@@ -16077,7 +16077,9 @@
             },
             "refused": {
               "changedOnDisk": "This file changed on disk. Review the change before saving.",
-              "deletedOnDisk": "This file was deleted on disk."
+              "deletedOnDisk": "This file was deleted on disk.",
+              "overwrite": "Overwrite",
+              "reload": "Reload"
             }
           }
         },
