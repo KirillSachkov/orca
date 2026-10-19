@@ -10,19 +10,31 @@ import { isActivatingBrowserGuestInput } from './browser-guest-input-gesture'
 
 export const BROWSER_EXTERNAL_APP_PROMPT_TIMEOUT_MS = 120_000
 
-// Web and browser-internal schemes; every other scheme belongs to an app on the user's computer.
+// Web and browser-internal schemes, plus Chrome's denied list (kDeniedSchemes): handlers that run
+// scripts, open shell folders or mount shares. Every other scheme belongs to an app on the computer.
 const NEVER_EXTERNAL_APP_PROTOCOLS: ReadonlySet<string> = new Set([
   'about:',
+  'afp:',
   'blob:',
   'chrome:',
   'data:',
   'devtools:',
+  'disk:',
+  'disks:',
   'file:',
   'filesystem:',
+  'hcp:',
   'http:',
   'https:',
+  'ie.http:',
   'javascript:',
+  'ms-help:',
+  'nntp:',
+  'res:',
+  'shell:',
+  'vbscript:',
   'view-source:',
+  'vnd.ms.radio:',
   `${DOC_PREVIEW_SCHEME}:`
 ])
 

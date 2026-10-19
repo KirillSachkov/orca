@@ -110,6 +110,11 @@ describe('browser external app launch', () => {
     'blob:https://example.com/id',
     'about:blank',
     'orca-preview://doc/index.html',
+    'shell:startup',
+    'vbscript:msgbox(1)',
+    'hcp://system/sysinfo',
+    'ms-help://topic',
+    'afp://share.example/volume',
     'not a url'
   ])('refuses %s without asking', (rawUrl) => {
     const renderer = mockRenderer(20)
