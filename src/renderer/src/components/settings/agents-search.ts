@@ -152,10 +152,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
       'auto.components.settings.agents.search.agentPermissions',
       'Agent Permissions'
     ),
-    description: translate(
-      'settings.agents.permissionsPresetDescription',
-      'Sets terminal permissions and the default for new chats. Existing chats keep their own permissions.'
-    ),
+    description: translate('settings.agents.permissionsScope', 'Defaults for new sessions.'),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.agents.search.permission', 'permission'),
       ...translateSearchKeyword(
