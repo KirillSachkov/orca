@@ -39,7 +39,7 @@ function textDiff(modifiedContent: string): DiffContent {
   }
 }
 
-function setUp(diffSource: OpenFile['diffSource']) {
+function setUp(diffSource: OpenFile['diffSource'], mode: 'diff' | 'edit' = 'diff') {
   const store = createEditorStore()
   mocks.store.current = store
   store.getState().openFile({
@@ -47,8 +47,8 @@ function setUp(diffSource: OpenFile['diffSource']) {
     relativePath: 'file.ts',
     worktreeId: 'wt-1',
     language: 'typescript',
-    mode: 'diff',
-    diffSource
+    mode,
+    ...(mode === 'diff' ? { diffSource } : {})
   })
   const fileId = store.getState().openFiles[0]!.id
   const { result } = renderHook(() =>
@@ -102,5 +102,15 @@ describe('editable diff tab disk baseline', () => {
     await load('index content')
 
     expect(baseline()).toBeUndefined()
+  })
+
+  it('leaves an edit tab baseline alone when its Changes view reads a missed rewrite', async () => {
+    // The edit surface keeps showing its cached content, so only its own file load may baseline it.
+    const { store, fileId, load, baseline } = setUp(undefined, 'edit')
+    store.getState().setLastKnownDiskSignature(fileId, getDiskBaselineSignature('cached A'))
+
+    await load('agent rewrite B')
+
+    expect(baseline()).toBe(getDiskBaselineSignature('cached A'))
   })
 })

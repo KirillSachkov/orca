@@ -126,8 +126,8 @@ describe('editor save baseline flow', () => {
       expect(disk.files.get(FILE_ID)).toBe('agent rewrite')
       expect(liveFile(store)?.externalMutation).toBe('changed')
 
-      // A save requested once the banner is showing is the user's overwrite choice.
-      await requestEditorFileSave({ fileId: FILE_ID })
+      // The editor's own save, requested once the banner is showing, is the user's overwrite choice.
+      await requestEditorFileSave({ fileId: FILE_ID, confirmDiskOverwrite: true })
       expect(disk.files.get(FILE_ID)).toBe('mine')
     } finally {
       cleanup()

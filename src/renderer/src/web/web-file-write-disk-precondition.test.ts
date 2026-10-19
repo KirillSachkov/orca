@@ -103,4 +103,18 @@ describe('paired web client save precondition', () => {
     ).rejects.toThrow('timed out')
     expect(calledMethods()).toEqual(['files.readPreview'])
   })
+
+  it('reports a file an older server refuses as file_too_large as changed', async () => {
+    // The paired client surfaces a failed envelope as an Error carrying the wire message.
+    const { methods, calledMethods } = methodsFor([], null, 'file_too_large')
+
+    const result = await methods.writeFile({
+      filePath: '/hub/repo/readme.md',
+      content: 'edited',
+      diskPrecondition: { ...precondition, allowMissing: true }
+    })
+
+    expect(result).toEqual({ ok: false, diskConflict: 'changed' })
+    expect(calledMethods()).toEqual(['files.readPreview'])
+  })
 })

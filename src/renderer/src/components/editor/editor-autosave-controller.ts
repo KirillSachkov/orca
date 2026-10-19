@@ -82,7 +82,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         return
       }
 
-      await queueSave(file, content)
+      await queueSave(file, content, 'user', detail.confirmDiskOverwrite === true)
       detail.resolve()
     } catch (error) {
       detail.reject(String((error as Error)?.message ?? error))

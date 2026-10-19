@@ -38,6 +38,8 @@ export type EditorSaveQuiesceDetail = EditorSaveQuiesceTarget & {
 export type EditorSaveFileTarget = {
   fileId: string
   fallbackContent?: string
+  /** Set only by the editor's own save action, the one the changed-on-disk banner warns. */
+  confirmDiskOverwrite?: true
 }
 
 export type EditorSaveFileDetail = EditorSaveFileTarget & {

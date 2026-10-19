@@ -11,15 +11,16 @@ export const SAVE_REFUSED_CHANGED_ON_DISK_MESSAGE =
 export const SAVE_REFUSED_DELETED_ON_DISK_MESSAGE = 'This file was deleted on disk.'
 
 /**
- * Why at enqueue: an explicit save requested while the changed-on-disk banner shows is the banner's
- * "overwrite" choice. Judged at execution, a save queued behind the refusal that raised the banner
+ * Only the editor's own save, requested while its changed-on-disk banner shows, is the banner's
+ * "overwrite" choice; programmatic saves (mobile, save-before-delete, rename) never saw it.
+ * Why at enqueue: judged at execution, a save queued behind the refusal that raised the banner
  * would read the banner as permission.
  */
 export function isConfirmedDiskOverwrite(
   file: Pick<OpenFile, 'externalMutation'> | undefined,
-  trigger: 'autosave' | 'user'
+  confirmDiskOverwrite: boolean
 ): boolean {
-  return trigger === 'user' && file?.externalMutation === 'changed'
+  return confirmDiskOverwrite && file?.externalMutation === 'changed'
 }
 
 /** The disk state a save may overwrite: the content this tab's edits are based on. */
@@ -55,8 +56,9 @@ export function applySaveDiskConflict(
   // Why: the writer just compared disk to the baseline, which is what the restore scan waits on.
   state.clearPendingDiskBaselineVerification(fileId)
   if (diskConflict === 'missing') {
-    // Why edit-only: the watcher tombstones only edit tabs; a diff tab just keeps its draft.
-    if (file.mode === 'edit' && file.externalMutation !== 'deleted') {
+    // Why edit-only: the watcher tombstones only edit tabs; a diff tab just keeps its draft. A
+    // 'renamed' marker already explains the absence more precisely.
+    if (file.mode === 'edit' && file.externalMutation === undefined) {
       state.setExternalMutation(fileId, 'deleted')
     }
     return

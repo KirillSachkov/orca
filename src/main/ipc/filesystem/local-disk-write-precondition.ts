@@ -11,6 +11,7 @@ import {
 } from '../../../shared/file-write-disk-precondition'
 import { isENOENT } from '../filesystem-path-containment'
 import { writeFile } from 'node:fs/promises'
+import { basename, join } from 'node:path'
 import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
 import { serializedParentDirectoryKey } from '../../destination-serialized-local-rename'
 import {
@@ -56,13 +57,24 @@ export async function checkLocalDiskWritePrecondition(
   }
 }
 
-// Why parent scope: it covers case-insensitive and Unicode aliases of one file without guessing collation.
-const editorWritesByParent = new Map<string, Promise<void>>()
+const editorWritesByFile = new Map<string, Promise<void>>()
 
 /**
- * Compare→write for editor saves, serialized per directory across this process's IPC and runtime
- * writers so two clients holding one baseline can't both pass. A write by another process between
- * the compare and the write is not prevented; the window is one read long.
+ * One file's lock key: its real parent folder plus a case- and Unicode-folded name. Why fold
+ * everywhere: an alias the filesystem would distinguish only over-serializes, never races.
+ */
+async function editorWriteLockKey(filePath: string): Promise<string> {
+  return join(
+    await serializedParentDirectoryKey(filePath),
+    basename(filePath).normalize('NFC').toLowerCase()
+  )
+}
+
+/**
+ * Compare→write for editor saves, serialized per file across this process's IPC and runtime
+ * writers so two clients holding one baseline can't both pass. Per file, so a read stuck on a dead
+ * mount holds up only that file. A write by another process between the compare and the write is
+ * not prevented; the window is one read long.
  */
 export async function writeLocalTextFileWithDiskPrecondition(
   filePath: string,
@@ -70,8 +82,8 @@ export async function writeLocalTextFileWithDiskPrecondition(
   precondition: FileWriteDiskPrecondition | undefined
 ): Promise<FileWriteResult> {
   return runKeyedSerializedOperation(
-    editorWritesByParent,
-    await serializedParentDirectoryKey(filePath),
+    editorWritesByFile,
+    await editorWriteLockKey(filePath),
     async (): Promise<FileWriteResult> => {
       const diskConflict = precondition
         ? await checkLocalDiskWritePrecondition(filePath, precondition)

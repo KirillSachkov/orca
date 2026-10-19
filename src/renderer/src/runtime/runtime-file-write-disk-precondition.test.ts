@@ -34,6 +34,7 @@ function serveHost(options: {
   enforcesPrecondition: boolean
   diskContent?: string
   readError?: string
+  readErrorCode?: string
   onRead?: () => void
 }): void {
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeRpcRequest) => {
@@ -59,7 +60,10 @@ function serveHost(options: {
           ? {
               id: 'rpc',
               ok: false,
-              error: { code: 'runtime_error', message: options.readError ?? ENOENT_MESSAGE }
+              error: {
+                code: options.readErrorCode ?? 'runtime_error',
+                message: options.readError ?? ENOENT_MESSAGE
+              }
             }
           : rpcOk({ content: options.diskContent, truncated: false, byteLength: 0 })
       )
@@ -252,6 +256,28 @@ describe('writeRuntimeFile disk precondition', () => {
     await expect(
       writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, precondition)
     ).rejects.toThrow('Runtime connection changed')
+    expect(writeCalls()).toHaveLength(0)
+  })
+
+  it('reports the wire file_too_large refusal from an older host as changed', async () => {
+    serveHost({
+      enforcesPrecondition: false,
+      readErrorCode: 'file_too_large',
+      readError: 'file_too_large'
+    })
+
+    const result = await writeRuntimeFile(
+      remoteContext,
+      '/remote/repo/file.ts',
+      'edited',
+      undefined,
+      {
+        ...precondition,
+        allowMissing: true
+      }
+    )
+
+    expect(result).toEqual({ ok: false, diskConflict: 'changed' })
     expect(writeCalls()).toHaveLength(0)
   })
 })

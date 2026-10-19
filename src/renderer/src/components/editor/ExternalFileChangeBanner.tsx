@@ -80,9 +80,15 @@ export function reloadTabContentFromDisk(
   )
 }
 
-export function keepTabEditsOverExternalChange(file: OpenFile): void {
+/** `seenDiskContent`: what the compare dialog showed, when Keep was chosen there. */
+export function keepTabEditsOverExternalChange(file: OpenFile, seenDiskContent?: string): void {
   const state = useAppStore.getState()
   state.setExternalMutation(file.id, null)
+  if (seenDiskContent !== undefined) {
+    // Why: adopt only the version the user compared against; a later write makes the next save refuse and re-raise the banner.
+    state.setLastKnownDiskSignature(file.id, getDiskBaselineSignature(seenDiskContent))
+    return
+  }
   // Why: autosave stays held until the baseline below lands, so it can neither be refused against
   // the stale baseline nor write before the dismissal is durable.
   state.setDiskOverwriteIntent(file.id, 'verifying')
@@ -161,9 +167,9 @@ export function ExternalFileChangeBanner({
     trackExternalChangeConflictAction(file, 'reload')
     reloadTabContentFromDisk(file, reloadContent)
   }
-  const handleKeepEdits = (): void => {
+  const handleKeepEdits = (seenDiskContent?: string): void => {
     trackExternalChangeConflictAction(file, 'keep')
-    keepTabEditsOverExternalChange(file)
+    keepTabEditsOverExternalChange(file, seenDiskContent)
   }
   const handleCompare = (): void => {
     trackExternalChangeConflictAction(file, 'compare')
@@ -196,7 +202,7 @@ export function ExternalFileChangeBanner({
               'Reload from Disk'
             )}
           </Button>
-          <Button type="button" size="xs" variant="ghost" onClick={handleKeepEdits}>
+          <Button type="button" size="xs" variant="ghost" onClick={() => handleKeepEdits()}>
             {translate(
               'auto.components.editor.ExternalFileChangeBanner.a95d02c644',
               'Keep My Edits'

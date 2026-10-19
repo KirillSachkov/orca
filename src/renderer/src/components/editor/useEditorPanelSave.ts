@@ -27,7 +27,11 @@ export function useEditorPanelSave({
         requestRenameForFile(saveTargetFile.id)
         return false
       }
-      return attemptEditorFileSave({ fileId: saveTargetFile.id, fallbackContent: content })
+      return attemptEditorFileSave({
+        fileId: saveTargetFile.id,
+        fallbackContent: content,
+        confirmDiskOverwrite: true
+      })
     },
     [openFiles, requestRenameForFile]
   )

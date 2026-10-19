@@ -45,8 +45,17 @@ export function isConfirmedFileNotFoundError(error: unknown): boolean {
   return error instanceof Error && /\bENOENT\b/.test(error.message)
 }
 
+// Why both: hosts answer with the `file_too_large` code (carried as the message); local readers in prose.
 function isFileTooLargeToReadError(error: unknown): boolean {
-  return error instanceof Error && /\btoo large\b|\bis larger than\b/i.test(error.message)
+  if (!(error instanceof Error)) {
+    return false
+  }
+  const code = 'code' in error ? error.code : undefined
+  return (
+    code === 'file_too_large' ||
+    error.message === 'file_too_large' ||
+    /\btoo large\b|\bis larger than\b/i.test(error.message)
+  )
 }
 
 /** Settles a precondition whose disk read failed; rethrows anything that doesn't prove the disk state. */

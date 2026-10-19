@@ -14,6 +14,9 @@ import { canOpenDiffSectionPreviewToSide } from '../../diff-section-preview'
 import { getLargeDiffRenderLimit } from '../../large-diff-render-limit'
 import { getStoredTextDiffContent, getStoredTextDiffResult } from '../../large-diff-section-content'
 import { removeDiffSectionMeasuredHeight } from '../../diff-section-height-cache'
+import { combinedDiffSectionDiskPrecondition } from '../../working-file-diff-disk-baseline'
+import { saveRefusalNotice } from '../../editor-file-save-attempt'
+import { toast } from 'sonner'
 import type { DiffSection } from '../../diff-section-types'
 import type { DiffSectionItemProps } from '../../diff-section-item-props'
 
@@ -171,7 +174,7 @@ export function useCombinedDiffSectionActions({
         const worktree = file.worktreeId
           ? findWorktreeById(state.worktreesByRepo, file.worktreeId)
           : null
-        await writeRuntimeFile(
+        const writeResult = await writeRuntimeFile(
           getEditorFileOperationContext(
             state,
             {
@@ -182,8 +185,15 @@ export function useCombinedDiffSectionActions({
             worktree?.path ?? null
           ),
           absolutePath,
-          content
+          content,
+          undefined,
+          combinedDiffSectionDiskPrecondition(section)
         )
+        if (!writeResult.ok) {
+          // Why: the section keeps its edits; the reload that follows an external change shows the newer disk.
+          toast.error(saveRefusalNotice(writeResult.diskConflict))
+          return
+        }
         // Why: the section list can be rebuilt while the write is pending, so re-resolve
         // by key — the captured index may now point at a different file.
         const savedIndex = sectionsRef.current.findIndex((s) => s.key === sectionKey)

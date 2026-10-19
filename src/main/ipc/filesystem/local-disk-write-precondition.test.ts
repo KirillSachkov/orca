@@ -8,13 +8,23 @@ import { createLocalFilesystemProvider } from '../../providers/local-filesystem-
 import { checkLocalDiskWritePrecondition } from './local-disk-write-precondition'
 import type * as LocalRegularFileRead from './local-regular-file-read'
 
-const fileRead = vi.hoisted(() => ({ understateSizeBy: 0 }))
+const fileRead = vi.hoisted(() => {
+  const state: { understateSizeBy: number; hangPath: string | null } = {
+    understateSizeBy: 0,
+    hangPath: null
+  }
+  return state
+})
 vi.mock('./local-regular-file-read', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalRegularFileRead>()
   return {
     ...actual,
     // Why: reports the size from before a concurrent append, as a stat racing the writer would.
     openLocalRegularFile: async (filePath: string) => {
+      if (filePath === fileRead.hangPath) {
+        // A read stuck on a dead network or WSL mount.
+        await new Promise(() => undefined)
+      }
       const opened = await actual.openLocalRegularFile(filePath)
       opened.stats.size -= fileRead.understateSizeBy
       return opened
@@ -30,6 +40,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   fileRead.understateSizeBy = 0
+  fileRead.hangPath = null
   await rm(base, { recursive: true, force: true })
 })
 
@@ -131,8 +142,27 @@ describe('local provider guarded write', () => {
       provider().writeFileWithDiskPrecondition(filePath, 'client two', fromBaseline)
     ])
 
-    expect(results).toEqual([{ ok: true }, { ok: false, diskConflict: 'changed' }])
-    expect(await readFile(filePath, 'utf8')).toBe('client one')
+    const winner = results.findIndex((result) => result.ok)
+    expect(results[1 - winner]).toEqual({ ok: false, diskConflict: 'changed' })
+    expect(await readFile(filePath, 'utf8')).toBe(winner === 0 ? 'client one' : 'client two')
+  })
+
+  it('does not hold up a save to another file in the folder behind a stuck read', async () => {
+    const stuck = join(base, 'stuck.ts')
+    const other = join(base, 'other.ts')
+    await writeFile(stuck, 'original')
+    await writeFile(other, 'original')
+    fileRead.hangPath = stuck
+    const fromBaseline = { expectedSignature: getDiskBaselineSignature('original') }
+
+    void provider().writeFileWithDiskPrecondition(stuck, 'edited', fromBaseline)
+    const otherSave = provider().writeFileWithDiskPrecondition(other, 'edited', fromBaseline)
+    const outcome = await Promise.race([
+      otherSave,
+      new Promise((resolve) => setTimeout(() => resolve('blocked'), 1_000))
+    ])
+
+    expect(outcome).toEqual({ ok: true })
   })
 
   it('does not resurrect a deleted file without allowMissing', async () => {

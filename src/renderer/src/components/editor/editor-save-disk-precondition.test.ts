@@ -138,7 +138,7 @@ describe('editor save disk precondition', () => {
 
     const cleanup = attachEditorAutosaveController(store)
     try {
-      await requestEditorFileSave({ fileId: FILE_ID })
+      await requestEditorFileSave({ fileId: FILE_ID, confirmDiskOverwrite: true })
 
       expect(disk.fs.writeFile).toHaveBeenCalledWith(
         expect.not.objectContaining({ diskPrecondition: expect.anything() })

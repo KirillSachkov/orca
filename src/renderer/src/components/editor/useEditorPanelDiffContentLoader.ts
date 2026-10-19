@@ -162,12 +162,7 @@ export function useEditorPanelDiffContentLoader({
         }
         setDiffContents((prev) => ({ ...prev, [file.id]: result }))
         // Why: an unstaged diff saves to the working file, so its guarded save needs that baseline too.
-        stampCleanWorkingFileDiffBaseline(
-          useAppStore.getState(),
-          file.id,
-          effectiveDiffSource,
-          result
-        )
+        stampCleanWorkingFileDiffBaseline(useAppStore.getState(), file.id, result)
       } catch (err) {
         if (diffReadGenerationRef.current[file.id] !== generation) {
           return

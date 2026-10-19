@@ -28,6 +28,7 @@ import {
   SAVE_REFUSED_CHANGED_ON_DISK_MESSAGE,
   SAVE_REFUSED_DELETED_ON_DISK_MESSAGE
 } from './editor-save-disk-precondition'
+import { refreshCleanSiblingTabsAfterSave } from './editor-saved-file-sibling-refresh'
 
 export type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
 
@@ -35,7 +36,8 @@ export type EditorSaveQueue = {
   queueSave: (
     file: OpenFile,
     fallbackContent: string,
-    trigger?: 'autosave' | 'user'
+    trigger?: 'autosave' | 'user',
+    confirmDiskOverwrite?: boolean
   ) => Promise<void>
   quiesceFileSave: (fileId: string) => Promise<void>
   clearAutoSaveTimer: (fileId: string) => void
@@ -67,13 +69,14 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
   const queueSave = (
     file: OpenFile,
     fallbackContent: string,
-    trigger: 'autosave' | 'user' = 'user'
+    trigger: 'autosave' | 'user' = 'user',
+    confirmDiskOverwrite = false
   ): Promise<void> => {
     clearAutoSaveTimer(file.id)
     const queuedGeneration = saveGeneration.get(file.id) ?? 0
     const overwriteConfirmed = isConfirmedDiskOverwrite(
       store.getState().openFiles.find((openFile) => openFile.id === file.id),
-      trigger
+      confirmDiskOverwrite
     )
 
     const previousSave = saveQueue.get(file.id) ?? Promise.resolve()
@@ -165,6 +168,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
           .getState()
           .setLastKnownDiskSignature(file.id, getWrittenContentDiskSignature(contentToSave))
         store.getState().setDiskOverwriteIntent(file.id, null)
+        refreshCleanSiblingTabsAfterSave(store.getState().openFiles, liveFile)
 
         if ((saveGeneration.get(file.id) ?? 0) !== queuedGeneration) {
           return
