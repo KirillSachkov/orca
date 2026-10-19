@@ -2888,6 +2888,7 @@
               "93e1f6bfca": "加载中",
               "98730088a6": "。在 Linear 中搜索或打开以查看完整列表。",
               "06b887d622": "首先显示",
+              "linearLoginUnreadable": "Orca 无法读取已保存的 Linear 登录信息。请在设置中重新连接。",
               "2c4b1c2c08": "数字",
               "f2cc1e0ff6": "Linear/项目",
               "906b5e4cb8": "Linear/项目/{{value0}}",

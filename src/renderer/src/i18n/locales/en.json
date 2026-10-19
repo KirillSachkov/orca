@@ -3116,6 +3116,7 @@
               "93e1f6bfca": "Loading",
               "98730088a6": ". Search or open Linear for the full set.",
               "06b887d622": "Showing first",
+              "linearLoginUnreadable": "Orca can’t read your saved Linear login. Reconnect it in Settings.",
               "2c4b1c2c08": "number",
               "f2cc1e0ff6": "Linear / Projects",
               "906b5e4cb8": "Linear / Projects / {{value0}}",

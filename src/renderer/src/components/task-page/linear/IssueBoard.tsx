@@ -28,16 +28,17 @@ export function TaskPageLinearIssueBoard({
     activeLinearIssues,
     activeLinearIssueLoading,
     activeLinearIssueError,
+    activeLinearIssueReadError,
     activeLinearIssueHasCollectionError,
     activeLinearIssueContextLabel,
     linearSearchActive,
     filteredLinearIssues
   } = model
-  // Why: an unreadable login is a connection state, shown where the issues would be like "not connected".
+  // Why: the selected scope's own read decides; host-wide status flags any broken workspace.
   const linearLoginUnreadable =
-    Boolean(activeLinearIssueError) &&
     activeLinearIssues.length === 0 &&
-    isIntegrationCredentialDecryptionError(activeLinearIssueError)
+    Boolean(activeLinearIssueReadError) &&
+    isIntegrationCredentialDecryptionError(activeLinearIssueReadError)
   return (
     <div
       className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
