@@ -28,7 +28,6 @@ export type SmartWorkspaceNameFieldProps = {
   onLinearIssueSelect: (issue: LinearIssue) => void
   onJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
   onOpenJiraSettings?: () => void
-  onOpenLinearSettings?: (sourceContext: TaskSourceContext | null) => void
   selectedSource: SmartWorkspaceNameSelection | null
   onClearSelectedSource: () => void
   gitlabSourceContext?: TaskSourceContext | null
@@ -88,10 +87,6 @@ export type CachedRepoSlug = RepoSlug
 
 export const EMPTY_REPO_SEARCH_REPOS: readonly RepoOption[] = []
 export const SEARCH_DEBOUNCE_MS = 200
-// cmdk values for the Linear read error's Settings row (a list item, not a source row) and for
-// "nothing highlighted" beside it: an empty cmdk value makes cmdk highlight its first item.
-export const LINEAR_SETTINGS_COMMAND_VALUE = 'linear-read-error:settings'
-export const NO_ROW_COMMAND_VALUE = 'none:'
 export const RESULT_LIMIT = 12
 
 export type WorkItemSourceSearchProps = Pick<

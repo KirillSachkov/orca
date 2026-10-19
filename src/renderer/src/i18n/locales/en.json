@@ -14762,7 +14762,8 @@
             "jiraMode": "Jira",
             "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
             "emoji": "Emoji",
-            "loadingLinearIssue": "Loading Linear issue…"
+            "loadingLinearIssue": "Loading Linear issue…",
+            "linearCredentialUnreadable": "Orca can’t read your saved Linear login. Reconnect Linear in Settings to search issues."
           },
           "ProjectCombobox": {
             "empty": "No projects match your search.",

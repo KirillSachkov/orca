@@ -56,15 +56,7 @@ const repo: Repo = { ...referenceRepo, executionHostId: 'runtime:env-1' }
 // Stable identity: search effects depend on the repos array.
 const repos = [repo]
 
-function LinearPicker({
-  value,
-  onOpenLinearSettings
-}: {
-  value: string
-  onOpenLinearSettings: React.ComponentProps<
-    typeof SmartWorkspaceSourceResultList
-  >['onOpenLinearSettings']
-}): React.JSX.Element {
+function LinearPicker({ value }: { value: string }): React.JSX.Element {
   const controller = useWorkItemSourceSearch({
     repos,
     selectedRepo: repo,
@@ -78,11 +70,7 @@ function LinearPicker({
       <button type="button" onClick={() => controller.setMode('linear')}>
         Linear tab
       </button>
-      <SmartWorkspaceSourceResultList
-        model={controller}
-        onSelect={() => {}}
-        onOpenLinearSettings={onOpenLinearSettings}
-      />
+      <SmartWorkspaceSourceResultList model={controller} onSelect={() => {}} />
     </Command>
   )
 }
@@ -90,34 +78,31 @@ function LinearPicker({
 describe('composer Linear read errors', () => {
   afterEach(cleanup)
 
-  it('shows the read credential error with Settings, and the next successful search clears it', async () => {
-    const message = credentialDecryptionMessage('Linear')
+  it('shows the read credential error, and the next successful search clears it', async () => {
     mocks.state.searchLinearIssues.mockImplementation(async (query) => {
       if (query === 'broken') {
-        throw new Error(message)
+        throw new Error(credentialDecryptionMessage('Linear'))
       }
       return [referenceLinearIssue()]
     })
-    const onOpenLinearSettings = vi.fn()
-    const { rerender } = render(
-      <LinearPicker value="broken" onOpenLinearSettings={onOpenLinearSettings} />
-    )
+    const message =
+      'Orca can’t read your saved Linear login. Reconnect Linear in Settings to search issues.'
+    const { rerender } = render(<LinearPicker value="broken" />)
     fireEvent.click(screen.getByRole('button', { name: 'Linear tab' }))
 
-    await waitFor(() => expect(screen.getByRole('status').textContent).toContain(message))
-    fireEvent.click(screen.getByRole('option', { name: /Settings/ }))
-    expect(onOpenLinearSettings).toHaveBeenCalledWith(
-      expect.objectContaining({ provider: 'linear', hostId: 'runtime:env-1' })
-    )
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe(message))
 
     // The status refresh after the failure re-runs the same read; the error must stay up.
-    mocks.state.linearStatus = { ...mocks.state.linearStatus, credentialError: message }
-    rerender(<LinearPicker value="broken" onOpenLinearSettings={onOpenLinearSettings} />)
+    mocks.state.linearStatus = {
+      ...mocks.state.linearStatus,
+      credentialError: credentialDecryptionMessage('Linear')
+    }
+    rerender(<LinearPicker value="broken" />)
     expect(screen.getByText(message)).toBeTruthy()
     await waitFor(() => expect(mocks.state.searchLinearIssues).toHaveBeenCalledTimes(2))
     expect(screen.getByText(message)).toBeTruthy()
 
-    rerender(<LinearPicker value="launch" onOpenLinearSettings={onOpenLinearSettings} />)
+    rerender(<LinearPicker value="launch" />)
     await waitFor(() => expect(screen.getByText(/Task/)).toBeTruthy())
     expect(screen.queryByText(message)).toBeNull()
   })

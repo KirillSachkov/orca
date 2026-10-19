@@ -11,7 +11,6 @@ import { replaceCompletedWorkspaceEmojiShortcode } from '@/lib/workspace-emoji-s
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { SelectionIcon } from './smart-workspace-source-row-content'
-import { LINEAR_SETTINGS_COMMAND_VALUE } from './smart-workspace-name-field-model'
 import type { SmartWorkspaceNameFieldController } from './use-smart-workspace-name-field-controller'
 
 export function renderSmartWorkspaceNameInput(
@@ -276,10 +275,6 @@ export function renderSmartWorkspaceNameInput(
             }
             if (mode === 'jira' || jiraSource.intent) {
               event.preventDefault()
-              return
-            }
-            // Why: cmdk selects the Linear Settings row; Enter must not also create.
-            if (resolvedCommandValue === LINEAR_SETTINGS_COMMAND_VALUE) {
               return
             }
             onPlainEnter?.()

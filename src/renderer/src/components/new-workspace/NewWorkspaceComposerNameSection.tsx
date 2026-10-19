@@ -22,7 +22,6 @@ type NewWorkspaceComposerNameSectionProps = Pick<
   | 'onSmartLinearIssueSelect'
   | 'onSmartJiraIssueSelect'
   | 'onOpenJiraSettings'
-  | 'onOpenLinearSettings'
   | 'smartNameSelection'
   | 'onClearSmartNameSelection'
   | 'smartNameGitHubSourceContext'
@@ -61,7 +60,6 @@ export function NewWorkspaceComposerNameSection({
   onSmartLinearIssueSelect,
   onSmartJiraIssueSelect,
   onOpenJiraSettings,
-  onOpenLinearSettings,
   smartNameSelection,
   onClearSmartNameSelection,
   smartNameGitHubSourceContext,
@@ -130,7 +128,6 @@ export function NewWorkspaceComposerNameSection({
         onLinearIssueSelect={onSmartLinearIssueSelect}
         onJiraIssueSelect={onSmartJiraIssueSelect}
         onOpenJiraSettings={onOpenJiraSettings}
-        onOpenLinearSettings={onOpenLinearSettings}
         selectedSource={smartNameSelection}
         onClearSelectedSource={onClearSmartNameSelection}
         githubSourceContext={smartNameGitHubSourceContext}

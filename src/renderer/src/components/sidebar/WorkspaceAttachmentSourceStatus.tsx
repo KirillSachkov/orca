@@ -18,7 +18,12 @@ export function WorkspaceAttachmentSourceStatus({
   onRetry: () => void
 }): React.JSX.Element {
   const linearReadError =
-    controller.mode === 'linear' || controller.mode === 'smart' ? controller.linearReadError : null
+    (controller.mode === 'linear' || controller.mode === 'smart') && controller.linearReadError
+      ? translate(
+          'auto.components.new.workspace.SmartWorkspaceNameField.linearCredentialUnreadable',
+          'Orca can’t read your saved Linear login. Reconnect Linear in Settings to search issues.'
+        )
+      : null
   let message: string | null =
     error ??
     linearReadError ??

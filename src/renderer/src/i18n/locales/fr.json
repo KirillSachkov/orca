@@ -14609,7 +14609,8 @@
             "jiraMode": "Jira",
             "jiraSelectBindFailed": "Impossible d'associer cette issue Jira. Sélectionnez le site correspondant ou reconnectez Jira, puis réessayez.",
             "emoji": "Émoji",
-            "loadingLinearIssue": "Chargement de l'issue Linear…"
+            "loadingLinearIssue": "Chargement de l'issue Linear…",
+            "linearCredentialUnreadable": "Orca ne peut pas lire votre connexion Linear enregistrée. Reconnectez Linear dans les réglages pour rechercher des issues."
           },
           "ProjectCombobox": {
             "empty": "Aucun projet ne correspond à votre recherche.",

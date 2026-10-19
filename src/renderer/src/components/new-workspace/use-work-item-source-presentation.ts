@@ -16,12 +16,7 @@ import {
   isBlockingTaskUrlResolution,
   isSmartWorkspaceSourceQueryWithinLimit
 } from '../../../../shared/new-workspace/smart-workspace-source-results'
-import {
-  LINEAR_SETTINGS_COMMAND_VALUE,
-  NO_ROW_COMMAND_VALUE,
-  RESULT_LIMIT,
-  type RowEntry
-} from './smart-workspace-name-field-model'
+import { RESULT_LIMIT, type RowEntry } from './smart-workspace-name-field-model'
 import type { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
 
 type Foundation = ReturnType<typeof useWorkItemSourceFoundation>
@@ -60,8 +55,7 @@ export function useWorkItemSourcePresentation(
     linearLoading,
     jiraLoading,
     linearUrlLoadingFeedbackQuery,
-    settledLinearUrlQuery,
-    linearReadError
+    settledLinearUrlQuery
   } = foundation
   const linearUrlIntent =
     options?.linearUrlIntent ?? parseBoundedSmartWorkspaceLinearIssueUrlIntent(value)
@@ -223,19 +217,12 @@ export function useWorkItemSourcePresentation(
     githubLoading,
     gitlabLoading
   })
-  // Why: the Settings row is reachable with the arrow keys but never highlighted by default,
-  // so Enter keeps its usual meaning.
-  const linearSettingsRowShown = Boolean(linearReadError) && (mode === 'linear' || mode === 'smart')
-  const settingsRowSelected = commandValue === LINEAR_SETTINGS_COMMAND_VALUE
-  const resolvedCommandValue =
-    settingsRowSelected && linearSettingsRowShown
-      ? commandValue
-      : resolveSmartWorkspaceCommandValue({
-          currentValue: settingsRowSelected ? '' : commandValue,
-          rows,
-          isQueryStale,
-          sourceIntent
-        }) || (linearSettingsRowShown ? NO_ROW_COMMAND_VALUE : '')
+  const resolvedCommandValue = resolveSmartWorkspaceCommandValue({
+    currentValue: commandValue,
+    rows,
+    isQueryStale,
+    sourceIntent
+  })
   // Why: ignored stale cmdk changes must not reappear after the query settles.
   useEffect(() => {
     if (commandValue === resolvedCommandValue) {

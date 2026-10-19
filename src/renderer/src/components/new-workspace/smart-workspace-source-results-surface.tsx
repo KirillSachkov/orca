@@ -33,11 +33,7 @@ export function renderSmartWorkspaceSourceResults(
         }
       }}
     >
-      <SmartWorkspaceSourceResultList
-        model={controller}
-        onSelect={controller.handleSelect}
-        onOpenLinearSettings={controller.onOpenLinearSettings}
-      />
+      <SmartWorkspaceSourceResultList model={controller} onSelect={controller.handleSelect} />
     </PopoverContent>
   )
 }

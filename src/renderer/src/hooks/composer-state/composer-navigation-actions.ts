@@ -15,11 +15,7 @@ type ComposerNavigationActionsInput = Pick<
 >
 
 import { useCallback } from 'react'
-import { LINEAR_INTEGRATION_SECTION_ID } from '@/components/settings/task-provider-integration-section-ids'
-import {
-  getTaskSourceRuntimeSettings,
-  type TaskSourceContext
-} from '../../../../shared/task-source-context'
+import { getTaskSourceRuntimeSettings } from '../../../../shared/task-source-context'
 
 export function useComposerNavigationActions(input: ComposerNavigationActionsInput) {
   const {
@@ -41,37 +37,26 @@ export function useComposerNavigationActions(input: ComposerNavigationActionsInp
     closeModal()
   }, [closeModal, openSettingsPage, openSettingsTarget])
 
-  // Why: reconnect lives on the integration card of the host that owns the source.
-  const openIntegrationsOnSourceHost = useCallback(
-    (sourceContext: TaskSourceContext | null | undefined, sectionId?: string): void => {
-      const runtimeEnvironmentId =
-        getTaskSourceRuntimeSettings(sourceContext).activeRuntimeEnvironmentId ?? null
-      void setActiveRuntimeEnvironmentPreference(runtimeEnvironmentId).then((selected) => {
-        if (!selected) {
-          return
-        }
-        openSettingsTarget({
-          pane: 'integrations',
-          repoId: null,
-          ...(sectionId ? { sectionId } : {})
-        })
-        openSettingsPage()
-        closeModal()
-      })
-    },
-    [closeModal, openSettingsPage, openSettingsTarget, setActiveRuntimeEnvironmentPreference]
-  )
-
-  const handleOpenJiraSettings = useCallback(
-    (): void => openIntegrationsOnSourceHost(smartNameJiraSourceContext),
-    [openIntegrationsOnSourceHost, smartNameJiraSourceContext]
-  )
-
-  const handleOpenLinearSettings = useCallback(
-    (sourceContext: TaskSourceContext | null): void =>
-      openIntegrationsOnSourceHost(sourceContext, LINEAR_INTEGRATION_SECTION_ID),
-    [openIntegrationsOnSourceHost]
-  )
+  const handleOpenJiraSettings = useCallback((): void => {
+    const runtimeEnvironmentId = getTaskSourceRuntimeSettings(
+      smartNameJiraSourceContext
+    ).activeRuntimeEnvironmentId
+    const targetRuntimeEnvironmentId = runtimeEnvironmentId ?? null
+    void setActiveRuntimeEnvironmentPreference(targetRuntimeEnvironmentId).then((selected) => {
+      if (!selected) {
+        return
+      }
+      openSettingsTarget({ pane: 'integrations', repoId: null })
+      openSettingsPage()
+      closeModal()
+    })
+  }, [
+    closeModal,
+    openSettingsPage,
+    openSettingsTarget,
+    setActiveRuntimeEnvironmentPreference,
+    smartNameJiraSourceContext
+  ])
 
   const folderCreateDisabled =
     creating ||
@@ -83,7 +68,6 @@ export function useComposerNavigationActions(input: ComposerNavigationActionsInp
   return {
     handleOpenAgentSettings,
     handleOpenJiraSettings,
-    handleOpenLinearSettings,
     folderCreateDisabled
   }
 }

@@ -5,9 +5,8 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { getSmartWorkspaceEmptyHint } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import { getRowItemClassName, RowIcon, RowLabel } from './smart-workspace-source-row-content'
-import { LINEAR_SETTINGS_COMMAND_VALUE, type RowEntry } from './smart-workspace-name-field-model'
+import type { RowEntry } from './smart-workspace-name-field-model'
 import type { WorkItemSourceSearch } from './use-work-item-source-search'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
 
 export function SmartWorkspaceSourceResultList({
   model,
@@ -15,8 +14,7 @@ export function SmartWorkspaceSourceResultList({
   isLinked,
   beforeResults,
   emptyHint,
-  isRowDisabled,
-  onOpenLinearSettings
+  isRowDisabled
 }: {
   model: Pick<
     WorkItemSourceSearch,
@@ -31,7 +29,6 @@ export function SmartWorkspaceSourceResultList({
     | 'linearStatusChecked'
     | 'linearStatus'
     | 'linearReadError'
-    | 'linearSourceContext'
     | 'showJiraSiteContext'
     | 'jiraConnectionStatus'
     | 'reserveLinearLoadingResults'
@@ -42,7 +39,6 @@ export function SmartWorkspaceSourceResultList({
   beforeResults?: React.ReactNode
   emptyHint?: string
   isRowDisabled?: (row: RowEntry) => boolean
-  onOpenLinearSettings?: (sourceContext: TaskSourceContext | null) => void
 }): React.JSX.Element {
   const {
     mode,
@@ -59,8 +55,7 @@ export function SmartWorkspaceSourceResultList({
     jiraConnectionStatus,
     reserveLinearLoadingResults,
     showLinearUrlLoadingFeedback,
-    linearReadError,
-    linearSourceContext
+    linearReadError
   } = model
   const visibleLinearReadError = mode === 'linear' || mode === 'smart' ? linearReadError : null
   return (
@@ -125,43 +120,28 @@ export function SmartWorkspaceSourceResultList({
               <div key={index} className="h-8 animate-pulse rounded bg-muted/40" />
             ))}
           </div>
-        ) : searchResultRows.length === 0 &&
-          visibleLinearReadError &&
-          onOpenLinearSettings &&
-          !jiraSource.intent ? (
-          // Why: a list row is reachable with the arrow keys and compact enough for the capped popover.
-          <CommandGroup className="p-1">
-            <CommandItem
-              selection="palette"
-              value={LINEAR_SETTINGS_COMMAND_VALUE}
-              onSelect={() => onOpenLinearSettings(linearSourceContext)}
-              className="text-xs"
-            >
-              <span role="status" aria-live="polite">
-                <span className="text-destructive">{visibleLinearReadError}</span>{' '}
-                <span className="text-primary underline underline-offset-2">
-                  {translate(
-                    'auto.components.new.workspace.SmartWorkspaceNameField.openSettings',
-                    'Settings'
-                  )}
-                </span>
-              </span>
-            </CommandItem>
-          </CommandGroup>
-        ) : searchResultRows.length === 0 && (visibleLinearReadError || !typedTextActionRow) ? (
-          <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-            {jiraSource.intent ? null : visibleLinearReadError ? (
-              <p role="status" aria-live="polite" className="text-destructive">
-                {visibleLinearReadError}
-              </p>
-            ) : mode === 'linear' && linearStatusChecked && !linearStatus.connected ? (
-              translate(
-                'auto.components.new.workspace.SmartWorkspaceNameField.3e8bb1176a',
-                'Connect Linear in Settings to search issues.'
-              )
-            ) : (
-              (emptyHint ?? getSmartWorkspaceEmptyHint(mode))
+        ) : searchResultRows.length === 0 && visibleLinearReadError && !jiraSource.intent ? (
+          // Why: compact so the whole sentence fits under the typed-text row in the capped popover.
+          <p
+            role="status"
+            aria-live="polite"
+            className="px-3 py-2 text-center text-xs text-destructive"
+          >
+            {translate(
+              'auto.components.new.workspace.SmartWorkspaceNameField.linearCredentialUnreadable',
+              'Orca can’t read your saved Linear login. Reconnect Linear in Settings to search issues.'
             )}
+          </p>
+        ) : searchResultRows.length === 0 && !typedTextActionRow ? (
+          <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+            {jiraSource.intent
+              ? null
+              : mode === 'linear' && linearStatusChecked && !linearStatus.connected
+                ? translate(
+                    'auto.components.new.workspace.SmartWorkspaceNameField.3e8bb1176a',
+                    'Connect Linear in Settings to search issues.'
+                  )
+                : (emptyHint ?? getSmartWorkspaceEmptyHint(mode))}
           </div>
         ) : searchResultRows.length > 0 ? (
           <CommandGroup className="p-1">

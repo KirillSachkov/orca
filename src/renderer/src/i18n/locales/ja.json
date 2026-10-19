@@ -14492,7 +14492,8 @@
             "jiraMode": "Jira",
             "jiraSelectBindFailed": "この Jira Issue をリンクできませんでした。該当するサイトを選択するか Jira に再接続してから、もう一度お試しください。",
             "emoji": "絵文字",
-            "loadingLinearIssue": "Linear Issue を読み込み中…"
+            "loadingLinearIssue": "Linear Issue を読み込み中…",
+            "linearCredentialUnreadable": "保存された Linear のログイン情報を Orca が読み取れません。設定で Linear を再接続して Issue を検索してください。"
           },
           "ProjectCombobox": {
             "empty": "検索条件に一致するプロジェクトはありません。",
