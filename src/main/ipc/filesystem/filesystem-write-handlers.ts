@@ -1,7 +1,7 @@
 import { ipcMain, shell } from 'electron'
 import { lstat, writeFile } from 'node:fs/promises'
 import type { SshMutationExpectation } from '../../../shared/ssh-types'
-import { assertSshMutationExpectation } from '../../ssh/ssh-connection-generation'
+import { assertSshMutationExpectation } from '../../ssh/connection/ssh-connection-generation'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { tryDeleteWslUncPath } from '../../wsl-unc-delete'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
@@ -14,6 +14,8 @@ import { registerFilesystemMutationHandlers } from '../filesystem-mutations'
 import { registerAgentSessionAttachmentUploadHandlers } from '../agent-session-attachment-upload-ipc'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { assertLocalWriteTargetIsRegularFile } from './local-regular-file-read'
+import { runNativeChatScratchSave } from '../../native-chat/native-chat-scratch-folder-lock'
+import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 
 export function registerFilesystemWriteHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
@@ -50,7 +52,9 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
         }
       }
       await assertLocalWriteTargetIsRegularFile(filePath)
-      await writeFile(filePath, args.content, 'utf-8')
+      await runNativeChatScratchSave(getProfileUserDataPath(), filePath, () =>
+        writeFile(filePath, args.content, 'utf-8')
+      )
     }
   )
 

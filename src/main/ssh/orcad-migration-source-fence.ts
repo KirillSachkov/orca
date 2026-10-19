@@ -24,13 +24,17 @@ import {
   confirmOrcadMigrationTerminalsUnderFence,
   type OrcadMigrationTerminalVerdict
 } from './orcad-migration-terminal-gate'
-import type { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
+import type { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 import {
   isBlockingOrcadMigrationBlocker,
   preflightOrcadMigrationExport,
   type OrcadMigrationPreflightStore
-} from './ssh-target-orcad-preflight'
+} from './targets/ssh-target-orcad-preflight'
 import { orcadMigrationRefusalReason } from './orcad-migration-refusal-reason'
+
+export const ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS = 'orcad_migration_leave_behind_terminals'
+export const ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS_REASON =
+  'Move anyway needs every terminal on this host closed first, and Orca could not confirm they all exited. Close them, or end them on the host, then connect again.'
 
 export type OrcadMigrationFenceState =
   | { state: 'none' }
@@ -106,6 +110,14 @@ export async function fenceOrcadMigrationSource(args: {
   const proof = args.terminalProof
   if (proof.verdict !== 'exited' && proof.verdict !== 'bridged') {
     return refuse(proof.verdict, 'orcad_migration_terminals', proof.reason)
+  }
+  if (proof.verdict === 'bridged' && target.managedServerLeaveBehind) {
+    // Why: leaving the saved tabs behind drops the identities the relay bridge reattaches through.
+    return refuse(
+      proof.relayVerdict,
+      ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS,
+      ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS_REASON
+    )
   }
   const preflight = preflightOrcadMigrationExport(
     args.store,
