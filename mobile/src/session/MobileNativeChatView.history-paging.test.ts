@@ -258,6 +258,20 @@ describe('MobileNativeChatView: history paging and anchoring', () => {
       now.mockRestore()
     })
 
+    it('detaches a following reader who drags up slowly, one pixel per scroll event', async () => {
+      await render({ folded: ['a1', 'a2', 'a3'].map((id) => assistantTurn(id, id)) })
+      scrollTo(500, 1_000)
+      resized()
+      const pins = scrollToOffset.mock.calls.length
+      for (let top = 499; top >= 470; top -= 1) {
+        scrollTo(top, 1_000)
+      }
+      // A reply lands: the reader who dragged 30px up is not pulled back to the end.
+      pageScroller.scrollHeight = 1_063
+      resized()
+      expect(scrollToOffset.mock.calls.length).toBe(pins)
+    })
+
     it.each([false, true])(
       'leaves a parked reader parked when a collapse below them clamps the page onto its end (finger down: %s)',
       async (fingerDown) => {

@@ -186,7 +186,9 @@ export function useMobileNativeChatTailFollow(args: {
       // lands under the reader's finger (a tap on a collapse below them).
       list?.watchMotion?.(({ by, moved, fromEnd }) => {
         if (followingRef.current) {
-          if (by === 'reader' && moved < -PAGE_MOVE_SLOP && fromEnd > PAGE_MOVE_SLOP) {
+          // Any upward move of the reader's that leaves the end detaches: a slow drag reports many
+          // 1px moves, and none of them alone is past a per-event threshold.
+          if (by === 'reader' && moved < 0 && fromEnd > PAGE_MOVE_SLOP) {
             setFollowing(false)
           }
         } else if (by !== 'own' && moved > PAGE_MOVE_SLOP && fromEnd <= AT_TAIL_SLOP) {
