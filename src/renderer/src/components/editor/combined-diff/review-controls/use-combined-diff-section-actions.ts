@@ -156,19 +156,9 @@ export function useCombinedDiffSectionActions({
     ]
   )
 
-  const handleSectionSave = useCallback(
-    async (index: number, overwriteDisk = false): Promise<void> => {
-      const section = sections[index]
-      if (!section) {
-        return
-      }
-      const modifiedEditor = modifiedEditorsRef.current.get(index)
-      if (!modifiedEditor && !section.dirty) {
-        return
-      }
-
+  const writeSection = useCallback(
+    async (section: DiffSection, content: string, overwriteDisk: boolean): Promise<void> => {
       const sectionKey = section.key
-      const content = modifiedEditor?.getValue() ?? section.modifiedContent
       const absolutePath = joinPath(file.filePath, section.path)
       try {
         const state = useAppStore.getState()
@@ -191,13 +181,15 @@ export function useCombinedDiffSectionActions({
           overwriteDisk ? undefined : combinedDiffSectionDiskPrecondition(section)
         )
         if (!writeResult.ok) {
+          // Why by key from live state: the list may be reordered or shrunk before the user clicks.
           const currentIndex = (): number =>
             sectionsRef.current.findIndex((s) => s.key === sectionKey)
           notifySectionSaveRefused(writeResult.diskConflict, {
             overwrite: () => {
-              const i = currentIndex()
-              if (i !== -1) {
-                void handleSectionSave(i, true)
+              const current = sectionsRef.current[currentIndex()]
+              // The draft lives in section state; position-keyed editors can belong to another row by now.
+              if (current?.dirty) {
+                void writeSectionRef.current(current, current.modifiedContent, true)
               }
             },
             reload: () => {
@@ -261,12 +253,28 @@ export function useCombinedDiffSectionActions({
       file.operationProvenance,
       file.runtimeEnvironmentId,
       file.worktreeId,
-      sections,
       sectionsRef,
       setSectionHeights,
       setSections,
       requestSectionReload
     ]
+  )
+  const writeSectionRef = useRef(writeSection)
+  writeSectionRef.current = writeSection
+
+  const handleSectionSave = useCallback(
+    async (index: number): Promise<void> => {
+      const section = sections[index]
+      if (!section) {
+        return
+      }
+      const modifiedEditor = modifiedEditorsRef.current.get(index)
+      if (!modifiedEditor && !section.dirty) {
+        return
+      }
+      await writeSection(section, modifiedEditor?.getValue() ?? section.modifiedContent, false)
+    },
+    [sections, writeSection]
   )
 
   const handleSectionSaveRef = useRef(handleSectionSave)

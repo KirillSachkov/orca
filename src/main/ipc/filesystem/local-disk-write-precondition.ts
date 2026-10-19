@@ -76,20 +76,11 @@ export async function checkLocalDiskWritePrecondition(
   }
 }
 
-const editorWritesByFile = new Map<string, Promise<void>>()
+const editorWritesByPath = new Map<string, Promise<void>>()
+const editorWritesByInode = new Map<string, Promise<void>>()
 
-/**
- * One file's lock key. An existing file is keyed by its inode (stat follows symlinks), so symlink
- * and hardlink aliases share a lock. A missing file is keyed by its real parent plus a case- and
- * Unicode-folded name; folding where the filesystem distinguishes names only over-serializes.
- */
-async function editorWriteLockKey(filePath: string): Promise<string> {
-  try {
-    const stats = await stat(filePath, { bigint: true })
-    return `inode:${stats.dev}:${stats.ino}`
-  } catch {
-    // Missing, or unreadable metadata: fall back to the path.
-  }
+/** A file's canonical path: real parent plus a case- and Unicode-folded name (folding only over-serializes). */
+async function editorWritePathKey(filePath: string): Promise<string> {
   let parentKey: string
   try {
     parentKey = await serializedParentDirectoryKey(filePath)
@@ -97,32 +88,51 @@ async function editorWriteLockKey(filePath: string): Promise<string> {
     // Why: the key only orders saves; a volume that can't resolve real paths must still save.
     parentKey = normalize(dirname(filePath))
   }
-  return `path:${join(parentKey, basename(filePath).normalize('NFC').toLowerCase())}`
+  return join(parentKey, basename(filePath).normalize('NFC').toLowerCase())
+}
+
+/** The file's inode (stat follows symlinks), or null when missing or unknown. */
+async function editorWriteInodeKey(filePath: string): Promise<string | null> {
+  try {
+    const stats = await stat(filePath, { bigint: true })
+    // Why: 9P and some SMB mounts report inode 0 for every file.
+    return stats.ino === 0n ? null : `${stats.dev}:${stats.ino}`
+  } catch {
+    return null
+  }
 }
 
 /**
  * Compare→write for editor saves, serialized per file across this process's IPC and runtime
- * writers so two clients holding one baseline can't both pass. Per file, so a read stuck on a dead
- * mount holds up only that file. A write by another process between the compare and the write is
- * not prevented; the window is one read long.
+ * writers so two clients holding one baseline can't both pass. Two locks, always in this order:
+ * the canonical path (stable even while a queued save creates the file) and then, if it exists,
+ * the inode (shared by symlink and hardlink aliases). Per file, so a read stuck on a dead mount
+ * holds up only that file. A write by another process between the compare and the write is not
+ * prevented; the window is one read long.
  */
 export async function writeLocalTextFileWithDiskPrecondition(
   filePath: string,
   content: string,
   precondition: FileWriteDiskPrecondition | undefined
 ): Promise<FileWriteResult> {
+  const compareAndWrite = async (): Promise<FileWriteResult> => {
+    const diskConflict = precondition
+      ? await checkLocalDiskWritePrecondition(filePath, precondition)
+      : null
+    if (diskConflict) {
+      return { ok: false, diskConflict }
+    }
+    await writeFile(filePath, content, 'utf-8')
+    return FILE_WRITE_OK
+  }
   return runKeyedSerializedOperation(
-    editorWritesByFile,
-    await editorWriteLockKey(filePath),
-    async (): Promise<FileWriteResult> => {
-      const diskConflict = precondition
-        ? await checkLocalDiskWritePrecondition(filePath, precondition)
-        : null
-      if (diskConflict) {
-        return { ok: false, diskConflict }
-      }
-      await writeFile(filePath, content, 'utf-8')
-      return FILE_WRITE_OK
+    editorWritesByPath,
+    await editorWritePathKey(filePath),
+    async () => {
+      const inodeKey = await editorWriteInodeKey(filePath)
+      return inodeKey === null
+        ? compareAndWrite()
+        : runKeyedSerializedOperation(editorWritesByInode, inodeKey, compareAndWrite)
     }
   )
 }

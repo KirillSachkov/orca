@@ -9,23 +9,18 @@ import {
   getRemoteFileArgs,
   withSshMutationExpectation
 } from './runtime-file-routing'
-import {
-  callRuntimeFileMutation,
-  callRuntimeFileMutationWithCapabilities
-} from './runtime-file-mutation-rpc'
+import { callRuntimeFileMutation } from './runtime-file-mutation-rpc'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import { localAccess } from './runtime-file-read-client'
 import { REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES } from '../../../shared/remote-runtime-memory-limits'
 import {
-  FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
-  FILE_WRITE_IF_UNCHANGED_METHOD,
   FILE_WRITE_OK,
   parseFileWriteResult,
   type FileWriteDiskPrecondition,
   type FileWriteResult
 } from '../../../shared/file-write-disk-precondition'
-import { checkDiskPreconditionFromClient } from './runtime-file-write-disk-precondition'
+import { writeRemoteFileIfUnchanged } from './runtime-file-write-disk-precondition'
 
 /** Refuses a save the host's frame cap would reject by dropping the whole connection. */
 function assertRemoteWriteFitsOneRequest(content: string): void {
@@ -92,23 +87,12 @@ export async function writeRuntimeFile(
     await callRuntimeFileMutation(remoteArgs.target, 'files.write', params, 15_000)
     return FILE_WRITE_OK
   }
-  return parseFileWriteResult(
-    await callRuntimeFileMutationWithCapabilities<unknown>(
-      remoteArgs.target,
-      'files.write',
-      async (capabilities) => {
-        if (capabilities.includes(FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY)) {
-          return { method: FILE_WRITE_IF_UNCHANGED_METHOD, params: { ...params, diskPrecondition } }
-        }
-        const diskConflict = await checkDiskPreconditionFromClient(
-          { ...context, target: remoteArgs.target },
-          filePath,
-          diskPrecondition
-        )
-        return diskConflict ? { result: { ok: false, diskConflict } } : { params }
-      },
-      15_000
-    )
+  return writeRemoteFileIfUnchanged(
+    { ...context, target: remoteArgs.target },
+    filePath,
+    content,
+    params,
+    diskPrecondition
   )
 }
 

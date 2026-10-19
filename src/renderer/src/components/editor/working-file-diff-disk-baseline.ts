@@ -1,7 +1,10 @@
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
-import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
+import {
+  getDiskBaselineSignature,
+  getWrittenContentDiskSignature
+} from '../../../../shared/disk-baseline-signature'
 import type { FileWriteDiskPrecondition } from '../../../../shared/file-write-disk-precondition'
 import type { DiffSection } from './diff-section-types'
 
@@ -51,5 +54,9 @@ export function combinedDiffSectionDiskPrecondition(
     return undefined
   }
   // Why allowMissing: a section save is an explicit user action, so recreating a deleted file is intended.
-  return { expectedSignature: getDiskBaselineSignature(loaded.modifiedContent), allowMissing: true }
+  // Why written-content: after a section save the loaded side is the string written, not re-read.
+  return {
+    expectedSignature: getWrittenContentDiskSignature(loaded.modifiedContent),
+    allowMissing: true
+  }
 }

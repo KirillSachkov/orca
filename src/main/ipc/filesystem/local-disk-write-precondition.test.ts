@@ -23,6 +23,13 @@ const realpathFailure = vi.hoisted(() => {
   const state: { path: string | null } = { path: null }
   return state
 })
+const zeroInodes = vi.hoisted(() => {
+  const state: { enabled: boolean } = { enabled: false }
+  return state
+})
+const writeGates = vi.hoisted(
+  () => new Map<string, { entered: () => void; release: Promise<void> }>()
+)
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
   return {
@@ -33,6 +40,20 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         throw Object.assign(new Error(`EIO: i/o error, realpath '${path}'`), { code: 'EIO' })
       }
       return actual.realpath(path)
+    },
+    // Why: 9P and some SMB mounts report inode 0 for every file.
+    stat: async (...args: Parameters<typeof actual.stat>) => {
+      const stats = await actual.stat(...args)
+      return zeroInodes.enabled ? Object.assign(stats, { ino: 0n }) : stats
+    },
+    // Why: holds one save between its passed check and its write, where a competing save must wait.
+    writeFile: async (...args: Parameters<typeof actual.writeFile>) => {
+      const gate = typeof args[1] === 'string' ? writeGates.get(args[1]) : undefined
+      if (gate) {
+        gate.entered()
+        await gate.release
+      }
+      return actual.writeFile(...args)
     }
   }
 })
@@ -63,6 +84,8 @@ afterEach(async () => {
   fileRead.understateSizeBy = 0
   fileRead.hangPath = null
   realpathFailure.path = null
+  writeGates.clear()
+  zeroInodes.enabled = false
   await rm(base, { recursive: true, force: true })
 })
 
@@ -203,6 +226,65 @@ describe('local provider guarded write', () => {
       expect(results.filter((result) => result.ok)).toHaveLength(1)
     }
   )
+
+  it('does not chain unrelated files on a volume that reports inode 0', async () => {
+    const stuck = join(base, 'stuck.ts')
+    const other = join(base, 'other.ts')
+    await writeFile(stuck, 'original')
+    await writeFile(other, 'original')
+    zeroInodes.enabled = true
+    fileRead.hangPath = stuck
+    const fromBaseline = { expectedSignature: getDiskBaselineSignature('original') }
+
+    void provider().writeFileWithDiskPrecondition(stuck, 'edited', fromBaseline)
+    const outcome = await Promise.race([
+      provider().writeFileWithDiskPrecondition(other, 'edited', fromBaseline),
+      new Promise((resolve) => setTimeout(() => resolve('blocked'), 1_000))
+    ])
+
+    expect(outcome).toEqual({ ok: true })
+  })
+
+  it('keeps saves ordered when a queued restore creates the file mid-queue', async () => {
+    const filePath = join(base, 'restored.ts')
+    const fromRestored = { expectedSignature: getDiskBaselineSignature('restored') }
+    const gateWrite = (content: string) => {
+      let entered: () => void = () => undefined
+      let release: () => void = () => undefined
+      const reached = new Promise<void>((resolve) => {
+        entered = resolve
+      })
+      writeGates.set(content, {
+        entered,
+        release: new Promise<void>((resolve) => {
+          release = resolve
+        })
+      })
+      return { reached, release: () => release() }
+    }
+    const restoreGate = gateWrite('restored')
+    const saveBGate = gateWrite('save B')
+
+    // The restore holds the lock while the file is still missing, so B queues on its path.
+    const restore = provider().writeFileWithDiskPrecondition(filePath, 'restored', {
+      ...fromRestored,
+      allowMissing: true
+    })
+    await restoreGate.reached
+    const saveB = provider().writeFileWithDiskPrecondition(filePath, 'save B', fromRestored)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    restoreGate.release()
+    await saveBGate.reached
+    // C arrives once the file exists, so an inode-only key would let it race B.
+    const saveC = provider().writeFileWithDiskPrecondition(filePath, 'save C', fromRestored)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    saveBGate.release()
+
+    const results = await Promise.all([restore, saveB, saveC])
+    expect(results.slice(0, 2)).toEqual([{ ok: true }, { ok: true }])
+    expect(results[2]).toEqual({ ok: false, diskConflict: 'changed' })
+    expect(await readFile(filePath, 'utf8')).toBe('save B')
+  })
 
   it('still saves where the folder cannot be resolved to a real path', async () => {
     const filePath = join(base, 'new.ts')

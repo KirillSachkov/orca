@@ -35,6 +35,13 @@ export async function assertRuntimeFileMutationCapability(
   return (await getRuntimeFileMutationStatus(target, expectedEnvironmentPairingRevision)).runtimeId
 }
 
+/** Thrown before sending, so nothing reached either runtime and a re-probed retry is safe. */
+export class RuntimeConnectionChangedError extends Error {
+  constructor() {
+    super('Runtime connection changed; try again.')
+  }
+}
+
 export type RuntimeFileMutationPlan<TResult> =
   | { method?: string; params: unknown }
   | { result: TResult }
@@ -65,7 +72,7 @@ export async function callRuntimeFileMutationWithCapabilities<TResult>(
       if (
         getRuntimeEnvironmentConnectionGeneration(target.environmentId) !== connectionGeneration
       ) {
-        throw new Error('Runtime connection changed; try again.')
+        throw new RuntimeConnectionChangedError()
       }
     }
   })

@@ -4,7 +4,11 @@ import {
   getDiskBaselineSignature,
   utf8ByteSizeCanDecodeToLength
 } from './disk-baseline-signature'
-import { compareDiskWritePrecondition, parseFileWriteResult } from './file-write-disk-precondition'
+import {
+  compareDiskWritePrecondition,
+  diskConflictFromReadFailure,
+  parseFileWriteResult
+} from './file-write-disk-precondition'
 
 describe('disk write precondition', () => {
   it('compares decoded disk text against the baseline signature', () => {
@@ -34,5 +38,16 @@ describe('disk write precondition', () => {
     expect(utf8ByteSizeCanDecodeToLength(content.length - 1, content.length)).toBe(false)
     expect(utf8ByteSizeCanDecodeToLength(content.length * 3 + 1, content.length)).toBe(false)
     expect(diskBaselineSignatureLength('not-a-signature')).toBeNull()
+  })
+
+  it.each([
+    [
+      'an ENOENT code with plain wording',
+      Object.assign(new Error('File not found'), { code: 'ENOENT' })
+    ],
+    ['an SFTP-style message', new Error('No such file or directory')]
+  ])('treats %s from an older host as a missing file', (_label, error) => {
+    const precondition = { expectedSignature: getDiskBaselineSignature('base') }
+    expect(diskConflictFromReadFailure(precondition, error)).toBe('missing')
   })
 })

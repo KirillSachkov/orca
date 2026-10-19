@@ -1,9 +1,26 @@
 import {
   compareDiskWritePrecondition,
   diskConflictFromReadFailure,
+  FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
+  FILE_WRITE_IF_UNCHANGED_METHOD,
+  FILE_WRITE_OK,
+  parseFileWriteResult,
   type FileWriteDiskConflict,
-  type FileWriteDiskPrecondition
+  type FileWriteDiskPrecondition,
+  type FileWriteResult
 } from '../../../shared/file-write-disk-precondition'
+import {
+  getDiskBaselineSignature,
+  getWrittenContentDiskSignature
+} from '../../../shared/disk-baseline-signature'
+import {
+  isRecoverableRemoteRuntimeConnectionError,
+  toRemoteRuntimeClientErrorLike
+} from '../../../shared/remote-runtime-client-error-classification'
+import {
+  callRuntimeFileMutationWithCapabilities,
+  RuntimeConnectionChangedError
+} from './runtime-file-mutation-rpc'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { readRuntimeFileContent } from './runtime-file-read-client'
 import { getRelativePathInsideWorktree } from './runtime-file-routing'
@@ -13,21 +30,99 @@ import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
  * For a host that would strip the precondition: compare from here before the unguarded write.
  * A read failure that doesn't prove the disk state fails the save rather than writing unverified.
  */
+type RemoteFileContext = RuntimeFileOperationArgs & {
+  target: RuntimeClientTarget & { kind: 'environment' }
+}
+
+function readRemoteFile(
+  context: RemoteFileContext,
+  filePath: string
+): Promise<{ content: string; isBinary: boolean }> {
+  return readRuntimeFileContent({
+    target: context.target,
+    filePath,
+    relativePath: getRelativePathInsideWorktree(context.worktreePath, filePath) ?? undefined,
+    worktreeId: context.worktreeId ?? undefined,
+    connectionId: context.connectionId,
+    expectedExternalSshTargetId: context.expectedExternalSshTargetId
+  })
+}
+
+async function diskHoldsWrittenContent(
+  context: RemoteFileContext,
+  filePath: string,
+  content: string
+): Promise<boolean> {
+  try {
+    const current = await readRemoteFile(context, filePath)
+    return (
+      !current.isBinary &&
+      getDiskBaselineSignature(current.content) === getWrittenContentDiskSignature(content)
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
+ * A guarded remote save. The host compares at write time when it serves `files.writeIfUnchanged`;
+ * an older host gets a client-side compare before a plain write.
+ */
+export async function writeRemoteFileIfUnchanged(
+  context: RemoteFileContext,
+  filePath: string,
+  content: string,
+  params: object,
+  precondition: FileWriteDiskPrecondition
+): Promise<FileWriteResult> {
+  const attempt = async (): Promise<FileWriteResult> =>
+    parseFileWriteResult(
+      await callRuntimeFileMutationWithCapabilities<unknown>(
+        context.target,
+        'files.write',
+        async (capabilities) => {
+          if (capabilities.includes(FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY)) {
+            return {
+              method: FILE_WRITE_IF_UNCHANGED_METHOD,
+              params: { ...params, diskPrecondition: precondition }
+            }
+          }
+          const diskConflict = await checkDiskPreconditionFromClient(
+            context,
+            filePath,
+            precondition
+          )
+          return diskConflict ? { result: { ok: false, diskConflict } } : { params }
+        },
+        15_000
+      )
+    )
+  try {
+    return await attempt()
+  } catch (error) {
+    if (error instanceof RuntimeConnectionChangedError) {
+      // Why: nothing was sent; one retry re-probes the new connection's capabilities.
+      return attempt()
+    }
+    // Why: a reply lost to the transport may follow a write that landed; keeping it avoids refusing the next save.
+    if (
+      isRecoverableRemoteRuntimeConnectionError(toRemoteRuntimeClientErrorLike(error)) &&
+      (await diskHoldsWrittenContent(context, filePath, content))
+    ) {
+      return FILE_WRITE_OK
+    }
+    throw error
+  }
+}
+
 export async function checkDiskPreconditionFromClient(
-  context: RuntimeFileOperationArgs & { target: RuntimeClientTarget & { kind: 'environment' } },
+  context: RemoteFileContext,
   filePath: string,
   precondition: FileWriteDiskPrecondition
 ): Promise<FileWriteDiskConflict | null> {
   let current: { content: string; isBinary: boolean }
   try {
-    current = await readRuntimeFileContent({
-      target: context.target,
-      filePath,
-      relativePath: getRelativePathInsideWorktree(context.worktreePath, filePath) ?? undefined,
-      worktreeId: context.worktreeId ?? undefined,
-      connectionId: context.connectionId,
-      expectedExternalSshTargetId: context.expectedExternalSshTargetId
-    })
+    current = await readRemoteFile(context, filePath)
   } catch (error) {
     return diskConflictFromReadFailure(precondition, error)
   }

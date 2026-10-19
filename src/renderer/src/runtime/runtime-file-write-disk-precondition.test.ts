@@ -36,9 +36,11 @@ function serveHost(options: {
   readError?: string
   readErrorCode?: string
   onRead?: () => void
+  onStatus?: () => void
 }): void {
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeRpcRequest) => {
     if (args.method === 'status.get') {
+      options.onStatus?.()
       return Promise.resolve(
         rpcOk({
           runtimeId: 'remote-runtime',
@@ -302,5 +304,65 @@ describe('writeRuntimeFile disk precondition', () => {
 
     expect(result).toEqual({ ok: false, diskConflict: 'changed' })
     expect(writeCalls()).toHaveLength(0)
+  })
+
+  it('keeps the save when the guarded write landed but its reply timed out', async () => {
+    serveHost({ enforcesPrecondition: true, diskContent: 'edited' })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc',
+      ok: false,
+      error: { code: 'runtime_timeout', message: 'Timed out waiting for the remote Orca runtime' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    const result = await writeRuntimeFile(
+      remoteContext,
+      '/remote/repo/file.ts',
+      'edited',
+      undefined,
+      precondition
+    )
+
+    expect(result).toEqual({ ok: true })
+  })
+
+  it('still fails a timed-out guarded write whose content is not on disk', async () => {
+    serveHost({ enforcesPrecondition: true, diskContent: 'original' })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc',
+      ok: false,
+      error: { code: 'runtime_timeout', message: 'Timed out waiting for the remote Orca runtime' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await expect(
+      writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, precondition)
+    ).rejects.toThrow('Timed out')
+  })
+
+  it('retries once on the new connection when it changed before the send', async () => {
+    let probes = 0
+    serveHost({
+      enforcesPrecondition: true,
+      onStatus: () => {
+        probes += 1
+        if (probes === 1) {
+          // The save started while disconnected; the transport reconnects during the probe.
+          advanceRuntimeEnvironmentConnectionGeneration('env-1')
+        }
+      }
+    })
+    runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: true }))
+
+    const result = await writeRuntimeFile(
+      remoteContext,
+      '/remote/repo/file.ts',
+      'edited',
+      undefined,
+      precondition
+    )
+
+    expect(result).toEqual({ ok: true })
+    expect(writeCalls()).toHaveLength(1)
   })
 })

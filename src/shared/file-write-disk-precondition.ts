@@ -42,9 +42,16 @@ export function parseFileWriteResult(value: unknown): FileWriteResult {
   return { ok: false, diskConflict: diskConflict === 'missing' ? 'missing' : 'changed' }
 }
 
-/** Only an ENOENT proves the file is gone; a lost transport proves nothing. */
+/** Only a not-found answer proves the file is gone; a lost transport proves nothing. */
 export function isConfirmedFileNotFoundError(error: unknown): boolean {
-  return error instanceof Error && /\bENOENT\b/.test(error.message)
+  if (!(error instanceof Error)) {
+    return false
+  }
+  // Why both: hosts and relays differ in carrying the errno code or only SFTP-style wording.
+  return (
+    ('code' in error && error.code === 'ENOENT') ||
+    /\bENOENT\b|\bno such file or directory\b/i.test(error.message)
+  )
 }
 
 // Why both: hosts answer with the `file_too_large` code (carried as the message); local readers in prose.
