@@ -140,7 +140,10 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
       return
     }
     let cancelled = false
-    setLinearError(null)
+    // Why: keep an unreadable-login error up during the re-read so the Reconnect card doesn't flash.
+    setLinearError((current) =>
+      current && isIntegrationCredentialDecryptionError(current) ? current : null
+    )
     const trimmed = appliedLinearSearch.trim()
     const effectiveLinearIssueLimit = clampLinearIssueListLimit(linearIssueLimit)
     const searchActive = trimmed.length > 0
@@ -234,6 +237,7 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
         ) {
           return
         }
+        setLinearError(null)
         if (readArgs.kind === 'search') {
           const issues = result as LinearIssue[]
           setLinearIssuesHasMore(false)
