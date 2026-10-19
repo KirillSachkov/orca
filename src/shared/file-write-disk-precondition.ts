@@ -47,12 +47,17 @@ export function isConfirmedFileNotFoundError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false
   }
-  // Why both: hosts and relays differ in carrying the errno code or only SFTP-style wording.
-  return (
-    ('code' in error && error.code === 'ENOENT') ||
-    /\bENOENT\b|\bno such file or directory\b/i.test(error.message)
-  )
+  // Other codes (an RPC envelope's 'runtime_error') carry no errno, so the wording decides.
+  if ('code' in error && error.code === 'ENOENT') {
+    return true
+  }
+  // Why anchored: the wording must open the message (or follow an IPC "Error: " prefix); a path that
+  // merely contains ENOENT, as in an EACCES on '/repo/ENOENT.md', must not read as missing.
+  return NOT_FOUND_MESSAGE.test(error.message)
 }
+
+const NOT_FOUND_MESSAGE =
+  /(?:^|Error: )(?:ENOENT: no such file or directory|No such file(?: or directory)?$)/i
 
 // Why both: hosts answer with the `file_too_large` code (carried as the message); local readers in prose.
 function isFileTooLargeToReadError(error: unknown): boolean {

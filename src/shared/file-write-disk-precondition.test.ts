@@ -50,4 +50,27 @@ describe('disk write precondition', () => {
     const precondition = { expectedSignature: getDiskBaselineSignature('base') }
     expect(diskConflictFromReadFailure(precondition, error)).toBe('missing')
   })
+
+  it.each([
+    [
+      'the desktop IPC wrapping',
+      "Error invoking remote method 'fs:readFile': Error: ENOENT: no such file or directory, open '/repo/a.ts'"
+    ],
+    ['the runtime wording', "ENOENT: no such file or directory, stat '/repo/a.ts'"]
+  ])('reads a not-found from %s', (_label, message) => {
+    const precondition = { expectedSignature: getDiskBaselineSignature('base') }
+    expect(diskConflictFromReadFailure(precondition, new Error(message))).toBe('missing')
+  })
+
+  it.each([
+    "EACCES: permission denied, open '/repo/ENOENT.md'",
+    "EACCES: permission denied, open '/repo/ENOENT/notes.md'",
+    "EACCES: permission denied, open '/repo/No such file or directory/notes.md'"
+  ])('never reads a path that merely names ENOENT as a missing file: %s', (message) => {
+    const precondition = {
+      expectedSignature: getDiskBaselineSignature('base'),
+      allowMissing: true
+    }
+    expect(() => diskConflictFromReadFailure(precondition, new Error(message))).toThrow('EACCES')
+  })
 })
