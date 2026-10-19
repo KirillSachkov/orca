@@ -16,7 +16,7 @@ export function WorkspaceAttachmentSourceStatus({
   resolved: boolean
   error: string | null
   onRetry: () => void
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const linearReadError =
     controller.mode === 'linear' || controller.mode === 'smart' ? controller.linearReadError : null
   let message: string | null =
@@ -66,12 +66,10 @@ export function WorkspaceAttachmentSourceStatus({
       retry = onRetry
     }
   }
-  // Why: an empty result list already shows the Linear read error; keep only this row's action.
+  // Why: an empty result list already shows the Linear read error; keep the row (and its
+  // action) so the sibling Reference type button doesn't shift.
   if (!error && message === linearReadError && controller.searchResultRows.length === 0) {
     message = null
-  }
-  if (!message && !retry) {
-    return null
   }
   return (
     <div
