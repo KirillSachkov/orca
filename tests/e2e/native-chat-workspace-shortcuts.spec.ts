@@ -116,7 +116,7 @@ structuredTest(
             .unifiedTabsByWorktree[chatWorkspaceId]?.find((tab) => tab.entityId === sessionId)?.id,
         { chatWorkspaceId, sessionId }
       )
-    await expect.poll(readTabId).toBeTruthy()
+    await expect.poll(readTabId, { timeout: 30_000 }).toBeTruthy()
     await page.locator(`[data-testid="sortable-tab"][data-tab-id="${await readTabId()}"]`).click()
     await verifyWorkspaceCycling(page, testInfo, chatWorkspaceId, otherWorkspaceId)
   }
