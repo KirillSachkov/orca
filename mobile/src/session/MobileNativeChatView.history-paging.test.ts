@@ -258,6 +258,24 @@ describe('MobileNativeChatView: history paging and anchoring', () => {
       now.mockRestore()
     })
 
+    it('leaves a parked reader parked when a collapse below them clamps the page onto its end', async () => {
+      await render({ folded: ['a1', 'a2', 'a3'].map((id) => assistantTurn(id, id)) })
+      scrollTo(500, 1_000)
+      resized()
+      // Parked 29 px short of the end by the reader's own wheel.
+      pageScroller.input('wheel')
+      scrollTo(471, 1_000)
+      const pins = scrollToOffset.mock.calls.length
+
+      // A run below collapses: the browser clamps onto the shorter end, with no input.
+      scrollTo(200, 700)
+      resized()
+      // A reply lands. Main leaves the reader where the clamp put them; so does the page.
+      pageScroller.scrollHeight = 763
+      resized()
+      expect(scrollToOffset.mock.calls.length).toBe(pins)
+    })
+
     it("opens another chat at its live end, not the last chat's", async () => {
       await render({ folded: [assistantTurn('a1', 'Chat A')] })
       scrollTo(500, 1_000)

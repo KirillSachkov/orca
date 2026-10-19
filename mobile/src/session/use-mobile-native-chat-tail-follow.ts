@@ -117,7 +117,7 @@ export type MobileNativeChatTailFollow = {
  *  scroll reports metrics like any other, so letting metrics decide intent let
  *  the view argue with itself. Only the user's own gestures and explicit jumps
  *  move native intent; metrics decide where a *released* gesture leaves us. On
- *  the page, position resumes following; only reader input detaches it.
+ *  the page, a move toward the end resumes following; only reader input detaches it.
  */
 export function useMobileNativeChatTailFollow(args: {
   /** Guards `scrollToEnd` against an empty list. */
@@ -174,20 +174,11 @@ export function useMobileNativeChatTailFollow(args: {
     (list: MobileNativeChatListHandle | null) => {
       listRef.current = list
       const page = !listReportsGestures()
-      // Resize geometry is authoritative only after the list restores a parked place.
-      const afterCorrection = () => {
-        const scroller = list?.getScrollableNode()
-        if (
-          scroller &&
-          scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop <= PAGE_MOVE_SLOP
-        ) {
-          setFollowing(true)
-        }
-        pinPageToEnd()
-      }
+      // Following comes only from classified motion: a resize can land a parked reader on a shorter
+      // end (a collapse below them), and that clamp is layout's, not the reader asking to follow.
       const observer = page
         ? observePageResize(list?.getScrollableNode(), (entries) =>
-            list?.afterResize ? list.afterResize(entries, afterCorrection) : afterCorrection()
+            list?.afterResize ? list.afterResize(entries, pinPageToEnd) : pinPageToEnd()
           )
         : null
       list?.observeWith?.(observer)
