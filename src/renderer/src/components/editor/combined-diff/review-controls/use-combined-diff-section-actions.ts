@@ -219,16 +219,23 @@ export function useCombinedDiffSectionActions({
               return s
             }
 
+            // Why: text typed while the write was pending stays the live draft over the new saved baseline.
+            const typedSince = s.modifiedContent !== content
             if (s.diffResult?.kind !== 'text') {
-              return {
-                ...s,
-                modifiedContent: content,
-                dirty: false,
-                largeDiffRenderLimit: s.largeDiffRenderLimit
-              }
+              return typedSince
+                ? s
+                : {
+                    ...s,
+                    modifiedContent: content,
+                    dirty: false,
+                    largeDiffRenderLimit: s.largeDiffRenderLimit
+                  }
             }
 
             const nextDiffResult = { ...s.diffResult, modifiedContent: content }
+            if (typedSince) {
+              return { ...s, diffResult: nextDiffResult, dirty: true }
+            }
             const nextLargeDiffRenderLimit = getLargeDiffRenderLimit({
               originalContent: s.originalContent,
               modifiedContent: content

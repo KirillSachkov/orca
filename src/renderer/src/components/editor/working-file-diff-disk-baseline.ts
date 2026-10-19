@@ -28,16 +28,15 @@ export function workingFileDiffDiskSignature(
   return getDiskBaselineSignature(result.modifiedContent)
 }
 
-/** Clean loads re-baseline; a dirty tab keeps the baseline its draft derives from. */
+/** Clean loads re-baseline through the store's one choke point; a dirty tab keeps its baseline. */
 export function stampCleanWorkingFileDiffBaseline(
-  state: Pick<AppState, 'openFiles' | 'setLastKnownDiskSignature'>,
+  state: Pick<AppState, 'openFiles' | 'commitCleanDiskContent'>,
   fileId: string,
   result: GitDiffResult
 ): void {
   const file = state.openFiles.find((openFile) => openFile.id === fileId)
-  const signature = file ? workingFileDiffDiskSignature(file, result) : null
-  if (signature !== null && file && !file.isDirty) {
-    state.setLastKnownDiskSignature(fileId, signature)
+  if (file && workingFileDiffDiskSignature(file, result) !== null && result.kind === 'text') {
+    state.commitCleanDiskContent(fileId, result.modifiedContent)
   }
 }
 

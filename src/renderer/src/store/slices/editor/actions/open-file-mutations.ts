@@ -1,4 +1,5 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
+import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
 import type { EditorSlice } from '../types/editor-slice'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
 import type { Tab } from '../../../../../../shared/tab-types'
@@ -18,6 +19,7 @@ export function createOpenFileMutations(
   | 'markFileDirty'
   | 'setExternalMutation'
   | 'setLastKnownDiskSignature'
+  | 'commitCleanDiskContent'
   | 'setDiskOverwriteIntent'
   | 'clearPendingDiskBaselineVerification'
   | 'setPendingDiskBaselineVerification'
@@ -128,6 +130,32 @@ export function createOpenFileMutations(
         return {
           openFiles: s.openFiles.map((f) =>
             f.id === fileId ? { ...f, externalMutation: next, diskOverwriteIntent: undefined } : f
+          )
+        }
+      }),
+
+    commitCleanDiskContent: (fileId, content) =>
+      set((s) => {
+        const file = s.openFiles.find((f) => f.id === fileId)
+        // Why: a dirty tab's edits derive from its old baseline; moving it would approve a save over unseen disk.
+        if (!file || file.isDirty) {
+          return s
+        }
+        const signature = getDiskBaselineSignature(content)
+        const draft = s.editorDrafts[fileId]
+        // Why: a clean tab can retain a draft (edit, then undo) that shadows the loaded text; drop it so the tab shows what it is baselined on.
+        const dropDraft = draft !== undefined && draft !== content
+        if (file.lastKnownDiskSignature === signature && !dropDraft) {
+          return s
+        }
+        const editorDrafts = dropDraft ? { ...s.editorDrafts } : s.editorDrafts
+        if (dropDraft) {
+          delete editorDrafts[fileId]
+        }
+        return {
+          editorDrafts,
+          openFiles: s.openFiles.map((f) =>
+            f.id === fileId ? { ...f, lastKnownDiskSignature: signature } : f
           )
         }
       }),

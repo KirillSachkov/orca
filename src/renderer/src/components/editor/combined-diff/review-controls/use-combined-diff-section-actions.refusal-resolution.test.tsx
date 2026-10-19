@@ -47,6 +47,7 @@ function editorShowing(value: string): monacoEditor.IStandaloneCodeEditor {
 
 function renderActions(initial: DiffSection[]) {
   const sectionsRef = { current: initial }
+  const setSections = vi.fn()
   const hook = renderHook(
     ({ sections }: { sections: DiffSection[] }) =>
       useCombinedDiffSectionActions({
@@ -62,7 +63,7 @@ function renderActions(initial: DiffSection[]) {
         sections,
         sectionsRef,
         setSectionHeights: vi.fn(),
-        setSections: vi.fn(),
+        setSections,
         requestSectionReload: vi.fn()
       }),
     { initialProps: { sections: initial } }
@@ -71,7 +72,7 @@ function renderActions(initial: DiffSection[]) {
     sectionsRef.current = next
     hook.rerender({ sections: next })
   }
-  return { hook, showSections }
+  return { hook, showSections, setSections }
 }
 
 function clickOverwrite(): void {
@@ -140,5 +141,29 @@ describe('resolving a refused section save after the section list changed', () =
     await act(async () => clickOverwrite())
 
     expect(mocks.writeRuntimeFile).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps text typed while an Overwrite was being written', async () => {
+    let finishWrite: (value: unknown) => void = () => undefined
+    mocks.writeRuntimeFile
+      .mockResolvedValueOnce({ ok: false, diskConflict: 'changed' })
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishWrite = resolve
+        })
+      )
+    const refused = section('a.ts', 'a draft')
+    const { hook, setSections } = renderActions([refused])
+    hook.result.current.modifiedEditorsRef.current.set(0, editorShowing('a draft'))
+    await act(() => hook.result.current.handleSectionSaveRef.current(0))
+    await act(async () => clickOverwrite())
+
+    await act(async () => finishWrite({ ok: true }))
+
+    const update: unknown = setSections.mock.calls.at(-1)?.[0]
+    const typedMeanwhile = { ...refused, modifiedContent: 'a draft, then more' }
+    const [after] = typeof update === 'function' ? update([typedMeanwhile]) : []
+    expect(after).toMatchObject({ dirty: true, modifiedContent: 'a draft, then more' })
+    expect(after?.diffResult).toMatchObject({ modifiedContent: 'a draft' })
   })
 })

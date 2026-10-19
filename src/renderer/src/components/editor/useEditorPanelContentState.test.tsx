@@ -68,7 +68,6 @@ vi.mock('@/store', () => ({
 }))
 
 import { useEditorPanelContentState } from './useEditorPanelContentState'
-import { getDiskBaselineSignature } from './diff-content-signature'
 import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
 
 type Deferred<T> = {
@@ -168,7 +167,7 @@ describe('useEditorPanelContentState', () => {
     mocks.getState.mockReturnValue({
       settings: null,
       openFiles: [],
-      setLastKnownDiskSignature: vi.fn()
+      commitCleanDiskContent: vi.fn()
     })
   })
 
@@ -317,7 +316,7 @@ describe('useEditorPanelContentState', () => {
     mocks.getState.mockReturnValue({
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
       openFiles: [],
-      setLastKnownDiskSignature: vi.fn()
+      commitCleanDiskContent: vi.fn()
     })
 
     container = document.createElement('div')
@@ -881,11 +880,11 @@ describe('useEditorPanelContentState', () => {
 
   it('stamps the disk baseline when a clean tab load resolves', async () => {
     const activeFile = createOpenFile()
-    const setLastKnownDiskSignature = vi.fn()
+    const commitCleanDiskContent = vi.fn()
     mocks.getState.mockReturnValue({
       settings: null,
       openFiles: [activeFile],
-      setLastKnownDiskSignature
+      commitCleanDiskContent
     })
     mocks.readRuntimeFileContent.mockResolvedValue({ content: 'disk content', isBinary: false })
 
@@ -897,34 +896,7 @@ describe('useEditorPanelContentState', () => {
     })
 
     await vi.waitFor(() =>
-      expect(setLastKnownDiskSignature).toHaveBeenCalledWith(
-        activeFile.id,
-        getDiskBaselineSignature('disk content')
-      )
+      expect(commitCleanDiskContent).toHaveBeenCalledWith(activeFile.id, 'disk content')
     )
-  })
-
-  it('keeps a dirty tab baseline untouched by content loads', async () => {
-    // Why: a dirty tab's draft still derives from the OLD content — moving
-    // the baseline on load would hide the conflict its restore check exists
-    // to catch.
-    const activeFile = createOpenFile({ isDirty: true })
-    const setLastKnownDiskSignature = vi.fn()
-    mocks.getState.mockReturnValue({
-      settings: null,
-      openFiles: [activeFile],
-      setLastKnownDiskSignature
-    })
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'disk content', isBinary: false })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('disk content'))
-    expect(setLastKnownDiskSignature).not.toHaveBeenCalled()
   })
 })

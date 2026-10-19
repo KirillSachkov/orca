@@ -1,4 +1,4 @@
-import { link, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { link, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -316,6 +316,35 @@ describe('local provider guarded write', () => {
       const results = await Promise.all([
         provider().writeFileWithDiskPrecondition(target, 'through target', createIfMissing),
         provider().writeFileWithDiskPrecondition(link, 'through link', createIfMissing)
+      ])
+
+      expect(results.filter((result) => result.ok)).toHaveLength(1)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'resolves a relative dangling link from its real folder, not the symlinked path to it',
+    async () => {
+      // base/alias -> base/real/sub, and sub/link.ts -> ../target.ts, so the target is base/real/target.ts.
+      await mkdir(join(base, 'real', 'sub'), { recursive: true })
+      await symlink(join(base, 'real', 'sub'), join(base, 'alias'))
+      await symlink('../target.ts', join(base, 'real', 'sub', 'link.ts'))
+      const createIfMissing = {
+        expectedSignature: getDiskBaselineSignature('original'),
+        allowMissing: true
+      }
+
+      const results = await Promise.all([
+        provider().writeFileWithDiskPrecondition(
+          join(base, 'alias', 'link.ts'),
+          'through alias',
+          createIfMissing
+        ),
+        provider().writeFileWithDiskPrecondition(
+          join(base, 'real', 'target.ts'),
+          'through target',
+          createIfMissing
+        )
       ])
 
       expect(results.filter((result) => result.ok)).toHaveLength(1)

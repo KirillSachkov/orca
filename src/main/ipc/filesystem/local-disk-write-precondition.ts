@@ -13,7 +13,7 @@ import {
   type FileWriteResult
 } from '../../../shared/file-write-disk-precondition'
 import { isENOENT } from '../filesystem-path-containment'
-import { readlink, stat, writeFile } from 'node:fs/promises'
+import { readlink, realpath, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, normalize, resolve } from 'node:path'
 import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
 import { serializedParentDirectoryKey } from '../../destination-serialized-local-rename'
@@ -85,11 +85,15 @@ const MAX_SYMLINK_HOPS = 16
 async function followSymlinks(filePath: string): Promise<string> {
   let current = filePath
   for (let hop = 0; hop < MAX_SYMLINK_HOPS; hop += 1) {
+    let target: string
     try {
-      current = resolve(dirname(current), await readlink(current))
+      target = await readlink(current)
     } catch {
       return current
     }
+    // Why the real folder: a relative `..` resolves against where the link really lives.
+    const linkFolder = await realpath(dirname(current)).catch(() => dirname(current))
+    current = resolve(linkFolder, target)
   }
   return current
 }

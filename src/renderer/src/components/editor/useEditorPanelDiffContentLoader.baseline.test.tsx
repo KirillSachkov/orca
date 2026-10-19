@@ -113,4 +113,16 @@ describe('editable diff tab disk baseline', () => {
 
     expect(baseline()).toBe(getDiskBaselineSignature('cached A'))
   })
+
+  it('drops a clean retained draft when it advances the baseline past it', async () => {
+    // Edit then Undo leaves a clean tab still holding draft A; the agent then rewrites the file to B.
+    const { store, fileId, load, baseline } = setUp('unstaged')
+    await load('A')
+    store.getState().setEditorDraft(fileId, 'A')
+
+    await load('B')
+
+    expect(baseline()).toBe(getDiskBaselineSignature('B'))
+    expect(store.getState().editorDrafts[fileId]).toBeUndefined()
+  })
 })

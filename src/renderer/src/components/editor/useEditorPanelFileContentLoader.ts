@@ -2,7 +2,6 @@ import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction 
 import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
-import { getDiskBaselineSignature } from './diff-content-signature'
 import { getRuntimeFileReadScope } from '@/runtime/runtime-file-routing'
 import { readEditorCsvFileContent } from './csv/csv-file-content'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
@@ -56,11 +55,7 @@ function stampCleanTabDiskBaseline(id: string, result: FileContent): void {
     return
   }
   try {
-    const state = useAppStore.getState()
-    const loadedFile = state.openFiles.find((file) => file.id === id)
-    if (loadedFile && !loadedFile.isDirty) {
-      state.setLastKnownDiskSignature(id, getDiskBaselineSignature(result.content))
-    }
+    useAppStore.getState().commitCleanDiskContent(id, result.content)
   } catch (err) {
     console.warn('[editor] failed to stamp disk baseline', err)
   }

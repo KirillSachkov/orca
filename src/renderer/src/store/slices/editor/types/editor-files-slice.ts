@@ -85,7 +85,10 @@ export type EditorFilesSlice = {
   setActiveFile: (fileId: string, targetWorktreeId?: string) => void
   markFileDirty: (fileId: string, dirty: boolean) => void
   setExternalMutation: (fileId: string, mutation: 'deleted' | 'renamed' | 'changed' | null) => void
+  /** Only for the tab's own write or the user adopting disk (Keep My Edits); loads use commitCleanDiskContent. */
   setLastKnownDiskSignature: (fileId: string, signature: string) => void
+  /** The one way a load advances a clean tab's baseline: refuses a dirty tab and drops a stale retained draft. */
+  commitCleanDiskContent: (fileId: string, content: string) => void
   setDiskOverwriteIntent: (fileId: string, intent: 'verifying' | 'unverified' | null) => void
   clearPendingDiskBaselineVerification: (fileId: string) => void
   setPendingDiskBaselineVerification: (fileId: string, value: boolean) => void
