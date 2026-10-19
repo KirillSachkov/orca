@@ -65,6 +65,8 @@ export function useEditorExternalWatch(): void {
       (target) => !previousKeys.has(getEditorExternalWatchTargetKey(target))
     )
 
+    // Why: publish first — a runtime stream that is already ready resyncs synchronously and must find its target.
+    targetsRef.current = nextTargets
     // Why: acquire before release so a root shared by an added and a removed target is never dropped in between.
     for (const target of added) {
       // Why: writes made while it was unwatched (background trim) were never reported. Resync like a
@@ -104,7 +106,6 @@ export function useEditorExternalWatch(): void {
         releaseWatchRoot(heldWatchRootsRef.current, target)
       }
     }
-    targetsRef.current = nextTargets
     // Why: final unmount cleanup owns teardown so target changes remain differential.
     // Why: the selector keeps the snapshot identity until a target or unwatched key changes.
   }, [snapshot])
@@ -115,7 +116,7 @@ export function useEditorExternalWatch(): void {
     const heldWatchRoots = heldWatchRootsRef.current
     const { handleFsChanged, dispose } = buildEditorExternalWatchEventHandler(
       (worktreePath, runtimeEnvironmentId) =>
-        targetsRef.current.find(
+        targetsRef.current.filter(
           (target) =>
             normalizeRuntimePathForComparison(target.worktreePath) ===
               normalizeRuntimePathForComparison(worktreePath) &&

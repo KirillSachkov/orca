@@ -22,11 +22,14 @@ export function selectWatchEligibleWorkspaceIds(args: {
     ids.add(args.activeWorktreeId)
   }
   // Why: edits normally happen only in the active workspace; a rare background edit (mobile) just adds a watch, and the rewatch re-check covers what it missed.
-  // Combined diffs stay watched: their section saves write without a disk check, and they cache bodies per path.
+  // Combined diffs stay watched: they cache bodies per path. Deleted/renamed tabs too: a resync
+  // overflow clears those marks and reloads into a read error, erasing the warning and last content.
   for (const file of args.openFiles) {
     if (
       (file.isDirty && !isVirtualEditorFile(file)) ||
-      (file.mode === 'diff' && file.diffSource?.startsWith('combined-'))
+      (file.mode === 'diff' && file.diffSource?.startsWith('combined-')) ||
+      file.externalMutation === 'deleted' ||
+      file.externalMutation === 'renamed'
     ) {
       ids.add(file.worktreeId)
     }

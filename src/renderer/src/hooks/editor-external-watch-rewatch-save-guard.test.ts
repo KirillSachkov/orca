@@ -58,12 +58,14 @@ describe('editing a stale tab right after its workspace is watched again', () =>
       expect(file?.isDirty).toBe(true)
 
       // The late re-watch resync (an overflow, as on reconnect) leaves the dirty tab and its banner alone.
-      const { handleFsChanged, dispose } = buildEditorExternalWatchEventHandler(() => ({
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        connectionId: undefined,
-        runtimeEnvironmentId: null
-      }))
+      const { handleFsChanged, dispose } = buildEditorExternalWatchEventHandler(() => [
+        {
+          worktreeId: 'wt-1',
+          worktreePath: '/repo',
+          connectionId: undefined,
+          runtimeEnvironmentId: null
+        }
+      ])
       handleFsChanged({
         worktreePath: '/repo',
         events: [{ kind: 'overflow', absolutePath: '/repo' }]

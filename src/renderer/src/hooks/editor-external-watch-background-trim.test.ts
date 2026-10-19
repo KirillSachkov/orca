@@ -166,6 +166,19 @@ describe('background workspace watch trim', () => {
     expect(watchedIds(state)).toEqual(['wt0', 'wt1'])
   })
 
+  it.each(['deleted', 'renamed'] as const)(
+    'keeps a background workspace with a clean %s tab watched',
+    (externalMutation) => {
+      const state = makeState({
+        worktrees,
+        openFiles: [tab('wt0'), tab('wt1', { externalMutation }), tab('wt2')],
+        activeWorktreeId: 'wt0',
+        trim: true
+      })
+      expect(watchedIds(state)).toEqual(['wt0', 'wt1'])
+    }
+  )
+
   it('ignores a dirty virtual tab when deciding eligibility', () => {
     const state = makeState({
       worktrees,
