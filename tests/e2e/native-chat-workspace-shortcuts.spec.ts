@@ -100,28 +100,32 @@ test('workspace shortcuts cycle through terminal-backed chat and keep its unsent
   await verifyWorkspaceCycling(page, testInfo, chatWorkspaceId, otherWorkspaceId)
 })
 
-structuredTest(
-  'workspace shortcuts cycle through a structured chat and keep its unsent draft',
-  async ({ orcaPage: page, claudeStub }, testInfo) => {
-    structuredTest.skip(!SUPPORTED, 'the Claude stub wrapper is POSIX-only')
-    const { chatWorkspaceId, otherWorkspaceId } = await prepareWorkspacePair(page)
-    await page.evaluate(async (command) => {
-      await window.__store?.getState().updateSettings({
-        experimentalNativeChat: true,
-        agentCmdOverrides: { claude: command }
-      })
-    }, buildFakeAgentCommandOverride(claudeStub.command))
-    const sessionId = await createChatOnHost(page, chatWorkspaceId)
-    const readTabId = () =>
-      page.evaluate(
-        ({ chatWorkspaceId, sessionId }) =>
-          window.__store
-            ?.getState()
-            .unifiedTabsByWorktree[chatWorkspaceId]?.find((tab) => tab.entityId === sessionId)?.id,
-        { chatWorkspaceId, sessionId }
-      )
-    await expect.poll(readTabId, { timeout: 30_000 }).toBeTruthy()
-    await page.locator(`[data-testid="sortable-tab"][data-tab-id="${await readTabId()}"]`).click()
-    await verifyWorkspaceCycling(page, testInfo, chatWorkspaceId, otherWorkspaceId)
-  }
-)
+structuredTest.describe('structured chat workspace shortcuts', () => {
+  structuredTest.skip(!SUPPORTED, 'the Claude stub wrapper is POSIX-only')
+
+  structuredTest(
+    'keeps its unsent draft and respects remapped shortcuts',
+    async ({ orcaPage: page, claudeStub }, testInfo) => {
+      const { chatWorkspaceId, otherWorkspaceId } = await prepareWorkspacePair(page)
+      await page.evaluate(async (command) => {
+        await window.__store?.getState().updateSettings({
+          experimentalNativeChat: true,
+          agentCmdOverrides: { claude: command }
+        })
+      }, buildFakeAgentCommandOverride(claudeStub.command))
+      const sessionId = await createChatOnHost(page, chatWorkspaceId)
+      const readTabId = () =>
+        page.evaluate(
+          ({ chatWorkspaceId, sessionId }) =>
+            window.__store
+              ?.getState()
+              .unifiedTabsByWorktree[chatWorkspaceId]?.find((tab) => tab.entityId === sessionId)
+              ?.id,
+          { chatWorkspaceId, sessionId }
+        )
+      await expect.poll(readTabId, { timeout: 30_000 }).toBeTruthy()
+      await page.locator(`[data-testid="sortable-tab"][data-tab-id="${await readTabId()}"]`).click()
+      await verifyWorkspaceCycling(page, testInfo, chatWorkspaceId, otherWorkspaceId)
+    }
+  )
+})
