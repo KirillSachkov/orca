@@ -12,13 +12,16 @@ import { recheckNativeChatComposerDraftImagesIn } from '@/components/native-chat
 const DRAFT_LOAD_WAIT_MS = 1_500
 
 /** Before any startup step, so a step that fails can't leave the drafts unloaded. */
-export function startNativeChatDraftLoad(): void {
+export function startNativeChatDraftLoad(): (() => void) | undefined {
   setNativeChatComposerDraftOwnerResolver((scopeKey) =>
     resolveNativeChatDraftOwner(useAppStore.getState(), scopeKey)
   )
   // Before the load: a removal after a draft's restore check must reach it.
-  window.api?.ui?.onAgentSessionUploadRemoved?.(recheckNativeChatComposerDraftImagesIn)
+  const stopRechecks = window.api?.ui?.onAgentSessionUploadRemoved?.(
+    recheckNativeChatComposerDraftImagesIn
+  )
   void hydrateNativeChatComposerDrafts()
+  return stopRechecks
 }
 
 /** Startup waits for the drafts alongside the session read, so a composer shows its draft from
