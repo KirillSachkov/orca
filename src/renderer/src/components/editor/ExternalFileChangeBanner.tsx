@@ -93,9 +93,9 @@ export function ExternalFileChangeBanner({
       discardDraftAndReloadContent(file, reloadContent)
     }
   }
-  const handleKeepEdits = (): void => {
+  const handleKeepEdits = (seenDiskContent?: string): void => {
     trackExternalChangeConflictAction(file, 'keep')
-    keepTabEditsOverExternalChange(file)
+    keepTabEditsOverExternalChange(file, seenDiskContent)
   }
   const handleCompare = (): void => {
     trackExternalChangeConflictAction(file, 'compare')
@@ -128,7 +128,7 @@ export function ExternalFileChangeBanner({
               'Reload from Disk'
             )}
           </Button>
-          <Button type="button" size="xs" variant="ghost" onClick={handleKeepEdits}>
+          <Button type="button" size="xs" variant="ghost" onClick={() => handleKeepEdits()}>
             {translate(
               'auto.components.editor.ExternalFileChangeBanner.a95d02c644',
               'Keep My Edits'

@@ -194,8 +194,27 @@ describe('local provider guarded write', () => {
       provider().writeFileWithDiskPrecondition(filePath, 'stale', {
         expectedSignature: getDiskBaselineSignature('original')
       })
-    ).resolves.toEqual({ ok: false, diskConflict: 'changed' })
+    ).resolves.toEqual({
+      ok: false,
+      diskConflict: 'changed',
+      currentSignature: getDiskBaselineSignature('edited')
+    })
     expect(await readFile(filePath, 'utf8')).toBe('edited')
+  })
+
+  it('reports the version on disk even when the size alone refused the write', async () => {
+    const filePath = join(base, 'grown.ts')
+    await writeFile(filePath, 'much longer than the baseline text')
+
+    await expect(
+      provider().writeFileWithDiskPrecondition(filePath, 'edited', {
+        expectedSignature: getDiskBaselineSignature('short')
+      })
+    ).resolves.toEqual({
+      ok: false,
+      diskConflict: 'changed',
+      currentSignature: getDiskBaselineSignature('much longer than the baseline text')
+    })
   })
 
   it('lets only one of two concurrent saves from the same baseline write', async () => {
@@ -209,7 +228,7 @@ describe('local provider guarded write', () => {
     ])
 
     const winner = results.findIndex((result) => result.ok)
-    expect(results[1 - winner]).toEqual({ ok: false, diskConflict: 'changed' })
+    expect(results[1 - winner]).toMatchObject({ ok: false, diskConflict: 'changed' })
     expect(await readFile(filePath, 'utf8')).toBe(winner === 0 ? 'client one' : 'client two')
   })
 
@@ -290,7 +309,7 @@ describe('local provider guarded write', () => {
 
     const results = await Promise.all([restore, saveB, saveC])
     expect(results.slice(0, 2)).toEqual([{ ok: true }, { ok: true }])
-    expect(results[2]).toEqual({ ok: false, diskConflict: 'changed' })
+    expect(results[2]).toMatchObject({ ok: false, diskConflict: 'changed' })
     expect(await readFile(filePath, 'utf8')).toBe('save B')
   })
 
@@ -364,7 +383,7 @@ describe('local provider guarded write', () => {
           expectedSignature: getDiskBaselineSignature('original'),
           allowMissing: true
         })
-      ).resolves.toEqual({ ok: false, diskConflict: 'changed' })
+      ).resolves.toMatchObject({ ok: false, diskConflict: 'changed' })
     }
   )
 

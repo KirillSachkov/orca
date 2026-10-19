@@ -129,8 +129,54 @@ export function captureEditorTabSaveSource(fileId: string): () => void {
   }
 }
 
+/** The version a refused save found on disk, per tab: what Keep My Edits consents to overwrite. */
+const observedDiskVersions = new Map<string, string>()
+/** Tabs whose Keep My Edits found no known disk version: their next save overwrites once. */
+const overwriteConsents = new Set<string>()
+
+/** A writer refused this tab's save and reported what disk holds now. */
+export function noteObservedDiskVersion(fileId: string, signature: string | undefined): void {
+  if (signature === undefined) {
+    observedDiskVersions.delete(fileId)
+  } else {
+    observedDiskVersions.set(fileId, signature)
+  }
+}
+
+/**
+ * Keep My Edits: the tab's edits now overwrite the disk version the user was shown (the compare
+ * dialog's, else the one the refusal reported), so a later write is refused again. With no known
+ * version, the next save overwrites once, like an explicit overwrite. Returns the adopted version.
+ */
+export function consentToDiskOverwrite(
+  fileId: string,
+  seenSignature: string | undefined
+): string | undefined {
+  const signature = seenSignature ?? observedDiskVersions.get(fileId)
+  observedDiskVersions.delete(fileId)
+  if (signature === undefined) {
+    overwriteConsents.add(fileId)
+    return undefined
+  }
+  overwriteConsents.delete(fileId)
+  restampEditorModelDiskBaseline(fileId, signature)
+  return signature
+}
+
+/** The version the tab's conflict is with, which an explicit overwrite is checked against. */
+export function getObservedDiskVersion(fileId: string): string | undefined {
+  return observedDiskVersions.get(fileId)
+}
+
+/** Taken by the one save that uses it. */
+export function takeDiskOverwriteConsent(fileId: string): boolean {
+  return overwriteConsents.delete(fileId)
+}
+
 /** A closed tab's id can come back for a different file session; start it fresh. */
 export function forgetEditorTabSaveSource(fileId: string): void {
+  observedDiskVersions.delete(fileId)
+  overwriteConsents.delete(fileId)
   otherSurfaceTabs.delete(fileId)
   tabModels.delete(fileId)
   signedDiskContent.delete(fileId)
@@ -292,5 +338,7 @@ export function __clearEditorModelDiskBaselinesForTests(): void {
   otherSurfaceTabs.clear()
   signedDiskContent.clear()
   modelDrafts.clear()
+  observedDiskVersions.clear()
+  overwriteConsents.clear()
   modelEditReportingFor = null
 }

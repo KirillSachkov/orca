@@ -7,7 +7,7 @@ import { createEditorSlice } from '@/store/slices/editor'
 import type { AppState } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import {
-  compareDiskWritePrecondition,
+  compareDiskWriteRefusal,
   type FileWriteDiskPrecondition,
   type FileWriteResult
 } from '../../../../shared/file-write-disk-precondition'
@@ -38,11 +38,11 @@ export function createFakeEditorDisk(initialFiles: Record<string, string> = {}):
           diskPrecondition?: FileWriteDiskPrecondition
         }): Promise<FileWriteResult> => {
           // Why: mirrors main's writer, which refuses when disk drifted from the tab's baseline.
-          const diskConflict = diskPrecondition
-            ? compareDiskWritePrecondition(diskPrecondition, files.get(filePath) ?? null)
+          const refusal = diskPrecondition
+            ? compareDiskWriteRefusal(diskPrecondition, files.get(filePath) ?? null)
             : null
-          if (diskConflict) {
-            return { ok: false, diskConflict }
+          if (refusal) {
+            return refusal
           }
           // Why: a UTF-8 write stores each lone surrogate as U+FFFD, as main's does.
           files.set(filePath, Buffer.from(content, 'utf8').toString('utf8'))

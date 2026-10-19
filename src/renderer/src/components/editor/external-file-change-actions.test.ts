@@ -26,6 +26,14 @@ import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
 import { toEditorModelUri } from './editor-model-uri'
 import { isProgrammaticContentSyncInFlight } from './monaco-programmatic-sync'
 import {
+  __clearEditorModelDiskBaselinesForTests,
+  noteEditorDraftSource,
+  noteObservedDiskVersion,
+  reportEditorModelEdit,
+  resolveEditorSaveBaseline,
+  takeDiskOverwriteConsent
+} from './editor-model-disk-baseline'
+import {
   discardDraftAndReloadContent,
   getMountedEditModel,
   keepTabEditsOverExternalChange,
@@ -127,6 +135,21 @@ describe('reloadMountedModelFromDisk', () => {
 
     await model.undo()
     expect(model.getValue()).toBe('draft text')
+  })
+
+  it('bases the model on the reloaded version, so Cmd+Z then save is checked against it', async () => {
+    await reloadMountedModelFromDisk(file, mounted())
+    await model.undo()
+    // The bridge reports the undo as the model's own edit.
+    reportEditorModelEdit('file-1', () => noteEditorDraftSource('file-1', model.getValue()))
+
+    expect(resolveEditorSaveBaseline('file-1', 'draft text', '', undefined)).toEqual({
+      content: 'draft text',
+      signature: getDiskBaselineSignature('disk text'),
+      fromModel: true,
+      modelGeneration: expect.any(Number)
+    })
+    __clearEditorModelDiskBaselinesForTests()
   })
 
   it('drops the result when the user typed during the read', async () => {
@@ -239,56 +262,45 @@ describe('discardDraftAndReloadContent', () => {
 })
 
 describe('keepTabEditsOverExternalChange', () => {
-  async function flush(): Promise<void> {
-    await Promise.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
-  }
+  afterEach(() => __clearEditorModelDiskBaselinesForTests())
 
-  it('clears the mark without touching the draft or dirty flag', () => {
+  it('clears the mark at once, without touching the draft or dirty flag or reading disk', () => {
     keepTabEditsOverExternalChange(file)
 
     expect(setExternalMutation).toHaveBeenCalledWith('file-1', null)
     expect(clearEditorDraft).not.toHaveBeenCalled()
     expect(markFileDirty).not.toHaveBeenCalled()
+    expect(readRuntimeFileContentMock).not.toHaveBeenCalled()
   })
 
-  it('advances the disk baseline so the dismissal survives restart', async () => {
-    readRuntimeFileContentMock.mockResolvedValue({ content: 'agent content', isBinary: false })
-    openFiles = [{ ...file, externalMutation: undefined }]
+  it('adopts the version a refused save reported, so the dismissal survives restart', () => {
+    noteObservedDiskVersion('file-1', getDiskBaselineSignature('agent content'))
 
     keepTabEditsOverExternalChange(file)
-    await flush()
 
     expect(setLastKnownDiskSignature).toHaveBeenCalledWith(
       'file-1',
       getDiskBaselineSignature('agent content')
     )
+    expect(takeDiskOverwriteConsent('file-1')).toBe(false)
   })
 
-  it('does not stamp a baseline over a newer conflict', async () => {
-    readRuntimeFileContentMock.mockResolvedValue({ content: 'even newer', isBinary: false })
+  it('adopts the version the compare dialog showed over the reported one', () => {
+    noteObservedDiskVersion('file-1', getDiskBaselineSignature('agent content'))
 
+    keepTabEditsOverExternalChange(file, 'what the dialog showed')
+
+    expect(setLastKnownDiskSignature).toHaveBeenCalledWith(
+      'file-1',
+      getDiskBaselineSignature('what the dialog showed')
+    )
+  })
+
+  it('grants one overwrite when no disk version is known', () => {
     keepTabEditsOverExternalChange(file)
-    await flush()
 
     expect(setLastKnownDiskSignature).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    [
-      'a floating-workspace tab, as the file the user named',
-      'global-floating-terminal',
-      'user-file'
-    ],
-    ['a project tab, inside its root', 'wt-1', undefined]
-  ])('reads %s', async (_label, worktreeId, kind) => {
-    const tab: OpenFile = { ...file, worktreeId }
-    openFiles = [tab]
-
-    keepTabEditsOverExternalChange(tab)
-    await flush()
-
-    expect(readRuntimeFileContentMock.mock.calls[0]?.[0]?.access?.kind).toBe(kind)
+    expect(takeDiskOverwriteConsent('file-1')).toBe(true)
+    expect(takeDiskOverwriteConsent('file-1')).toBe(false)
   })
 })

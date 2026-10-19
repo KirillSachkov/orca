@@ -15,7 +15,14 @@ export type FileWriteDiskPrecondition = {
 
 export type FileWriteDiskConflict = 'changed' | 'missing'
 
-export type FileWriteResult = { ok: true } | { ok: false; diskConflict: FileWriteDiskConflict }
+export type FileWriteResult =
+  | { ok: true }
+  | {
+      ok: false
+      diskConflict: FileWriteDiskConflict
+      /** The version disk now holds, when the writer read it; optional, so older hosts omit it. */
+      currentSignature?: string
+    }
 
 export const FILE_WRITE_OK: FileWriteResult = { ok: true }
 
@@ -39,7 +46,35 @@ export function parseFileWriteResult(value: unknown): FileWriteResult {
     return FILE_WRITE_OK
   }
   const diskConflict = 'diskConflict' in value ? value.diskConflict : undefined
-  return { ok: false, diskConflict: diskConflict === 'missing' ? 'missing' : 'changed' }
+  if (diskConflict === 'missing') {
+    return { ok: false, diskConflict: 'missing' }
+  }
+  const currentSignature =
+    'currentSignature' in value && typeof value.currentSignature === 'string'
+      ? value.currentSignature
+      : undefined
+  return currentSignature === undefined
+    ? { ok: false, diskConflict: 'changed' }
+    : { ok: false, diskConflict: 'changed', currentSignature }
+}
+
+/** `compareDiskWritePrecondition` as a refusal reply, carrying the version read when it differs. */
+export function compareDiskWriteRefusal(
+  precondition: FileWriteDiskPrecondition,
+  current: string | null | undefined
+): FileWriteResult | null {
+  const diskConflict = compareDiskWritePrecondition(precondition, current)
+  return diskConflict ? diskWriteRefusal(diskConflict, current) : null
+}
+
+/** A client-side compare's refusal, carrying the version it read when there was one. */
+export function diskWriteRefusal(
+  diskConflict: FileWriteDiskConflict,
+  currentText: string | null | undefined
+): FileWriteResult {
+  return diskConflict === 'changed' && typeof currentText === 'string'
+    ? { ok: false, diskConflict, currentSignature: getDiskBaselineSignature(currentText) }
+    : { ok: false, diskConflict }
 }
 
 /** Only a not-found answer proves the file is gone; a lost transport proves nothing. */

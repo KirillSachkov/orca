@@ -22,6 +22,7 @@ import { trackExternalChangeConflictAction } from './editor-external-change-tele
 import { editorTabFileAccess } from '@/lib/local-file-access'
 import type { FileWriteResult } from '../../../../shared/file-write-disk-precondition'
 import {
+  adoptWrittenDiskVersion,
   applySaveDiskConflict,
   getSaveDiskPrecondition,
   isConfirmedDiskOverwrite,
@@ -30,8 +31,8 @@ import {
 } from './editor-save-disk-precondition'
 import {
   resolveEditorSaveBaseline,
-  settleEditorModelAfterOtherSurfaceSave,
-  settleEditorModelAfterSave
+  getObservedDiskVersion,
+  takeDiskOverwriteConsent
 } from './editor-model-disk-baseline'
 
 export type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
@@ -158,10 +159,12 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
             ? SELF_WRITE_REMOTE_TTL_MS
             : undefined
         )
+        // Why taken here: Keep My Edits with no known disk version lets exactly the next save overwrite.
         const diskPrecondition = getSaveDiskPrecondition(
           saveBaseline.signature,
           trigger,
-          overwriteConfirmed
+          overwriteConfirmed || takeDiskOverwriteConsent(file.id),
+          overwriteConfirmed ? getObservedDiskVersion(file.id) : undefined
         )
         let writeResult: FileWriteResult
         try {
@@ -180,7 +183,13 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
         if (!writeResult.ok) {
           clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
           // Why: the file stays dirty; the user resolves the conflict through the banner or tombstone.
-          applySaveDiskConflict(store.getState(), file.id, writeResult.diskConflict, connectionId)
+          applySaveDiskConflict(
+            store.getState(),
+            file.id,
+            writeResult.diskConflict,
+            connectionId,
+            writeResult.currentSignature
+          )
           if (trigger === 'autosave') {
             return
           }
@@ -191,27 +200,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
           )
         }
         // Why: disk now holds contentToSave even if a quiesce superseded this save; a stale baseline would refuse the next one.
-        const writtenSignature = getWrittenContentDiskSignature(contentToSave)
-        // Why only if unchanged: a reload while a slow remote reply was in flight recorded newer disk.
-        const storeAfterWrite = store.getState()
-        if (
-          storeAfterWrite.openFiles.find((openFile) => openFile.id === file.id)
-            ?.lastKnownDiskSignature === liveFile.lastKnownDiskSignature
-        ) {
-          storeAfterWrite.setLastKnownDiskSignature(file.id, writtenSignature)
-        }
-        if (saveBaseline.fromModel) {
-          settleEditorModelAfterSave(file.id, saveBaseline.modelGeneration, writtenSignature)
-        } else {
-          // Why: another surface (rich markdown, CSV, notebook) changed disk under the retained model;
-          // its next mount re-bases from the store record, which now holds the written version.
-          settleEditorModelAfterOtherSurfaceSave(
-            file.id,
-            saveBaseline.modelGeneration,
-            contentToSave,
-            writtenSignature
-          )
-        }
+        adoptWrittenDiskVersion(store.getState(), liveFile, saveBaseline, contentToSave)
 
         if ((saveGeneration.get(file.id) ?? 0) !== queuedGeneration) {
           return

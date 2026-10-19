@@ -10,6 +10,11 @@ import { getDiskBaselineSignature } from './diff-content-signature'
 import { ORCA_EDITOR_FILE_RELOADED_EVENT, type EditorFileSavedDetail } from './editor-autosave'
 import { getDiskChangeRevision } from './editor-changed-on-disk-mark'
 import { getEditorModelOwnerKey } from './editor-model-owner'
+import {
+  consentToDiskOverwrite,
+  noteEditorModelSynced,
+  stampEditorModelDiskBaseline
+} from './editor-model-disk-baseline'
 import { toEditorModelUri } from './editor-model-uri'
 import { replaceModelContentAsUndoStep } from './monaco-content-sync'
 import {
@@ -96,7 +101,12 @@ export async function reloadMountedModelFromDisk(
       detail: { fileId: file.id, content }
     })
   )
-  state.setLastKnownDiskSignature(file.id, getDiskBaselineSignature(content))
+  const reloadSignature = getDiskBaselineSignature(content)
+  // Why the model's stamp: its text and the disk version it is based on move together; Cmd+Z
+  // back to the edits keeps that version, so a save over a newer write is still refused.
+  noteEditorModelSynced(file.id, model.getValue())
+  stampEditorModelDiskBaseline(file.id, model, reloadSignature)
+  state.setLastKnownDiskSignature(file.id, reloadSignature)
   state.clearEditorDraft(file.id)
   state.markFileDirty(file.id, false)
   state.setExternalMutation(file.id, null)
@@ -118,19 +128,20 @@ export function discardDraftAndReloadContent(
   reloadContent(file)
 }
 
-export function keepTabEditsOverExternalChange(file: OpenFile): void {
-  useAppStore.getState().setExternalMutation(file.id, null)
-  // Why: advance the baseline so the restart conflict scan doesn't re-derive the dismissed
-  // conflict. Best-effort: a failed read only re-surfaces the banner.
-  void readTabTextFromDisk(file)
-    .then((content) => {
-      const current = useAppStore.getState()
-      const liveFile = findLiveFile(current, file.id)
-      // Why: a newer conflict marked in the interim owns the baseline.
-      if (content === null || !liveFile || liveFile.externalMutation === 'changed') {
-        return
-      }
-      current.setLastKnownDiskSignature(file.id, getDiskBaselineSignature(content))
-    })
-    .catch(() => undefined)
+/**
+ * Keep My Edits, decided now: the tab's next save overwrites the disk version the user saw (the
+ * compare dialog's text, else the version a refused save reported), and is refused if disk has
+ * changed again since. With no known version, that next save overwrites once.
+ */
+export function keepTabEditsOverExternalChange(file: OpenFile, seenDiskContent?: string): void {
+  const state = useAppStore.getState()
+  const adopted = consentToDiskOverwrite(
+    file.id,
+    seenDiskContent === undefined ? undefined : getDiskBaselineSignature(seenDiskContent)
+  )
+  if (adopted !== undefined) {
+    // Why the store too: the restart conflict scan and a draft without a model read it.
+    state.setLastKnownDiskSignature(file.id, adopted)
+  }
+  state.setExternalMutation(file.id, null)
 }

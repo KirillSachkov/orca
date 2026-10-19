@@ -16,7 +16,7 @@ import {
   stampEditorModelDiskBaseline
 } from './editor-model-disk-baseline'
 import { getDiskBaselineSignature } from './diff-content-signature'
-import { keepTabEditsOverExternalChange } from './ExternalFileChangeBanner'
+import { keepTabEditsOverExternalChange } from './external-file-change-actions'
 import { SAVE_REFUSED_CHANGED_ON_DISK_MESSAGE } from './editor-save-disk-precondition'
 import type * as RuntimeFileReadClient from '@/runtime/runtime-file-read-client'
 

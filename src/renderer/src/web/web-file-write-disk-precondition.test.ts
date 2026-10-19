@@ -60,7 +60,7 @@ describe('paired web client save precondition', () => {
       diskPrecondition: precondition
     })
 
-    expect(result).toEqual({ ok: false, diskConflict: 'changed' })
+    expect(result).toMatchObject({ ok: false, diskConflict: 'changed' })
     expect(calledMethods()).toEqual(['files.readPreview'])
   })
 
@@ -114,7 +114,7 @@ describe('paired web client save precondition', () => {
       diskPrecondition: { ...precondition, allowMissing: true }
     })
 
-    expect(result).toEqual({ ok: false, diskConflict: 'changed' })
+    expect(result).toMatchObject({ ok: false, diskConflict: 'changed' })
     expect(calledMethods()).not.toContain('files.write')
   })
 
@@ -157,7 +157,7 @@ describe('paired web client save precondition', () => {
         diskPrecondition: { expectedSignature: getDiskBaselineSignature('x'.repeat(4_000_000)) }
       })
 
-      expect(result).toEqual(expected)
+      expect(result).toMatchObject(expected)
       expect(calledMethods().includes('files.write')).toBe(expected.ok)
     }
   )

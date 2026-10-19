@@ -93,7 +93,7 @@ describe('writeRuntimeFile disk precondition', () => {
       precondition
     )
 
-    expect(result).toEqual({ ok: false, diskConflict: 'changed' })
+    expect(result).toMatchObject({ ok: false, diskConflict: 'changed' })
     expect(fsWriteFile).toHaveBeenCalledWith(
       expect.objectContaining({ diskPrecondition: precondition })
     )
@@ -192,7 +192,12 @@ describe('writeRuntimeFile disk precondition', () => {
       precondition
     )
 
-    expect(result).toEqual({ ok: false, diskConflict: 'changed' })
+    // Why the version: Keep My Edits adopts it, so the next save overwrites only this rewrite.
+    expect(result).toEqual({
+      ok: false,
+      diskConflict: 'changed',
+      currentSignature: getDiskBaselineSignature('agent rewrite')
+    })
     expect(writeCalls()).toHaveLength(0)
   })
 
@@ -259,7 +264,7 @@ describe('writeRuntimeFile disk precondition', () => {
       }
     )
 
-    expect(result).toEqual({ ok: false, diskConflict: 'changed' })
+    expect(result).toMatchObject({ ok: false, diskConflict: 'changed' })
     expect(writeCalls()).toHaveLength(0)
   })
 
@@ -303,7 +308,7 @@ describe('writeRuntimeFile disk precondition', () => {
       }
     )
 
-    expect(result).toEqual({ ok: false, diskConflict: 'changed' })
+    expect(result).toMatchObject({ ok: false, diskConflict: 'changed' })
     expect(writeCalls()).toHaveLength(0)
   })
 

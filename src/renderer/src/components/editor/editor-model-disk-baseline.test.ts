@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store'
+import type { OpenFile } from '@/store/slices/editor'
 import { requestEditorFileSave } from './editor-autosave'
 import { attachEditorAutosaveController } from './editor-autosave-controller'
 import { __clearSelfWriteRegistryForTests } from './editor-self-write-registry'
@@ -22,18 +23,16 @@ import {
   stampAppliedEditorContent
 } from './editor-model-disk-baseline'
 import { getDiskBaselineSignature } from './diff-content-signature'
-import {
-  keepTabEditsOverExternalChange,
-  reloadTabContentFromDisk
-} from './ExternalFileChangeBanner'
+import { keepTabEditsOverExternalChange } from './external-file-change-actions'
+import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
 import { buildEditorSessionData } from '@/lib/workspace-session'
 import type * as RuntimeFileReadClient from '@/runtime/runtime-file-read-client'
 
 const mocks = vi.hoisted(() => {
   const store: { current: StoreApi<AppState> | null } = { current: null }
-  return { store, readRuntimeFileContent: vi.fn(), toast: vi.fn() }
+  return { store, readRuntimeFileContent: vi.fn() }
 })
-vi.mock('sonner', () => ({ toast: Object.assign(mocks.toast, { error: vi.fn() }) }))
+vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => mocks.store.current?.getState() }
@@ -54,6 +53,7 @@ type Harness = {
   /** A keystroke in any pane: the shared model changes and reports its text. */
   type: (text: string) => void
   save: () => Promise<void>
+  file: () => OpenFile
 }
 
 function setUp(disk: string, opened: string, eol: '\n' | '\r\n' = '\n'): Harness {
@@ -98,7 +98,8 @@ function setUp(disk: string, opened: string, eol: '\n' | '\r\n' = '\n'): Harness
       })
       store.getState().markFileDirty(FILE_ID, true)
     },
-    save: () => requestEditorFileSave({ fileId: FILE_ID })
+    save: () => requestEditorFileSave({ fileId: FILE_ID }),
+    file: () => store.getState().openFiles.find((openFile) => openFile.id === FILE_ID)!
   }
 }
 
@@ -453,28 +454,79 @@ describe('a tab whose shared Monaco model owns the disk baseline', () => {
     expect(persisted?.lastKnownDiskSignature).toBe(getDiskBaselineSignature('A typed + pasted'))
   })
 
-  it("keeps a reload's Undo draft paired with its own base while the tab's model holds the reload", async () => {
+  it('refuses a save after Keep My Edits once an agent writes again, and reports the new version', async () => {
     const tab = attach(setUp('A', 'A'))
-    tab.store.getState().setLastKnownDiskSignature(FILE_ID, getDiskBaselineSignature('A'))
-    tab.type('D')
-    tab.disk.files.set(FILE_ID, 'B')
-    const file = tab.store.getState().openFiles[0]!
-    // Reload: the model takes B; then the user switches tabs, so no pane re-syncs it.
-    reloadTabContentFromDisk(file, () => {
-      tab.showInPane('B', 'B')
-      tab.store.getState().setLastKnownDiskSignature(FILE_ID, getDiskBaselineSignature('B'))
-    })
-    const undo: () => void = mocks.toast.mock.calls[0]?.[1]?.action?.onClick
-    undo()
-
-    const state = tab.store.getState()
-    const persisted = buildEditorSessionData(state.openFiles, state.editorDrafts, {}, {}, {})
-      .openFilesByWorktree?.['wt-1']?.[0]
-    expect(persisted?.dirtyDraftContent).toBe('D')
-    expect(persisted?.lastKnownDiskSignature).toBe(getDiskBaselineSignature('A'))
-    // Saving the restored draft is checked against the version it was edited from.
+    tab.type('mine')
+    tab.disk.files.set(FILE_ID, 'agent 1')
     await expect(tab.save()).rejects.toThrow()
-    expect(tab.disk.files.get(FILE_ID)).toBe('B')
+    expect(tab.file().externalMutation).toBe('changed')
+
+    keepTabEditsOverExternalChange(tab.file())
+    expect(tab.file().externalMutation).toBeFalsy()
+    tab.disk.files.set(FILE_ID, 'agent 2')
+    await expect(tab.save()).rejects.toThrow()
+    expect(tab.disk.files.get(FILE_ID)).toBe('agent 2')
+    expect(tab.file().externalMutation).toBe('changed')
+
+    // The second refusal reported agent 2, so keeping again overwrites exactly that.
+    keepTabEditsOverExternalChange(tab.file())
+    await tab.save()
+    expect(tab.disk.files.get(FILE_ID)).toBe('mine')
+  })
+
+  it('lets Keep My Edits with no known disk version overwrite once, then guards again', async () => {
+    const tab = attach(setUp('A', 'A'))
+    tab.type('mine')
+    tab.disk.files.set(FILE_ID, 'agent')
+    // The watcher saw the change but reported no version.
+    markFileChangedOnDisk(tab.store.getState(), tab.file(), {
+      connectionId: undefined,
+      origin: 'live'
+    })
+
+    keepTabEditsOverExternalChange(tab.file())
+    await tab.save()
+    expect(tab.disk.files.get(FILE_ID)).toBe('mine')
+
+    tab.disk.files.set(FILE_ID, 'agent again')
+    tab.type('mine again')
+    await expect(tab.save()).rejects.toThrow()
+    expect(tab.disk.files.get(FILE_ID)).toBe('agent again')
+  })
+
+  it('checks a save after Reload then Cmd+Z against the reloaded version', async () => {
+    const tab = attach(setUp('A', 'A'))
+    tab.type('mine')
+    tab.disk.files.set(FILE_ID, 'B')
+    // Reload lands B in the model with its version; Cmd+Z brings the edits back as a model edit.
+    tab.showInPane('B', 'B')
+    tab.type('mine')
+    tab.disk.files.set(FILE_ID, 'C')
+
+    await expect(tab.save()).rejects.toThrow()
+    expect(tab.disk.files.get(FILE_ID)).toBe('C')
+
+    // With disk still at the reloaded version, saving the restored edits is the user's choice.
+    tab.disk.files.set(FILE_ID, 'B')
+    await tab.save()
+    expect(tab.disk.files.get(FILE_ID)).toBe('mine')
+  })
+
+  it('checks an overwrite under the banner against the version the refusal reported', async () => {
+    const tab = attach(setUp('A', 'A'))
+    tab.type('mine')
+    tab.disk.files.set(FILE_ID, 'B')
+    await expect(tab.save()).rejects.toThrow()
+    tab.disk.files.set(FILE_ID, 'C')
+
+    const overwrite = (): Promise<void> =>
+      requestEditorFileSave({ fileId: FILE_ID, confirmDiskOverwrite: true })
+    // The banner was about B; C arrived after, so the overwrite is refused and reports C.
+    await expect(overwrite()).rejects.toThrow()
+    expect(tab.disk.files.get(FILE_ID)).toBe('C')
+
+    await overwrite()
+    expect(tab.disk.files.get(FILE_ID)).toBe('mine')
   })
 
   it('adopts a slow save reply only if no reload re-based the tab meanwhile', async () => {

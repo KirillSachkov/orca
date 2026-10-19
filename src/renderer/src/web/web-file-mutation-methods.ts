@@ -7,12 +7,11 @@ import type { RuntimeFileSnapshot } from '../runtime/runtime-file-range-client'
 import { pagedTextFileResult, readFileInChunks } from '../runtime/runtime-paged-file-read'
 import type { RuntimeFileReadChunkResult } from '../../../shared/runtime-types'
 import {
-  compareDiskWritePrecondition,
+  compareDiskWriteRefusal,
   diskConflictFromReadFailure,
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
   FILE_WRITE_IF_UNCHANGED_METHOD,
   parseFileWriteResult,
-  type FileWriteDiskConflict,
   type FileWriteDiskPrecondition,
   type FileWriteResult
 } from '../../../shared/file-write-disk-precondition'
@@ -136,7 +135,7 @@ async function checkWebDiskPreconditionFromClient(
   session: WebFileMutationSession,
   file: ResolvedWebRuntimeFile,
   precondition: FileWriteDiskPrecondition
-): Promise<FileWriteDiskConflict | null> {
+): Promise<FileWriteResult | null> {
   let preview: unknown
   try {
     preview = await session.callRuntimeResult('files.readPreview', {
@@ -148,9 +147,10 @@ async function checkWebDiskPreconditionFromClient(
     if (error instanceof Error && error.message === 'file_too_large') {
       // Why undefined on failure: a host that can't page it keeps the earlier answer, 'changed'.
       const text = await readWholeTextFile(session, file).catch(() => undefined)
-      return compareDiskWritePrecondition(precondition, text)
+      return compareDiskWriteRefusal(precondition, text)
     }
-    return diskConflictFromReadFailure(precondition, error)
+    const diskConflict = diskConflictFromReadFailure(precondition, error)
+    return diskConflict ? { ok: false, diskConflict } : null
   }
   const text =
     typeof preview === 'object' &&
@@ -160,7 +160,7 @@ async function checkWebDiskPreconditionFromClient(
     typeof preview.content === 'string'
       ? preview.content
       : undefined
-  return compareDiskWritePrecondition(precondition, text)
+  return compareDiskWriteRefusal(precondition, text)
 }
 
 export function createWebFileMutationMethods(
@@ -211,12 +211,12 @@ export function createWebFileMutationMethods(
                 params: { ...params, diskPrecondition }
               }
             }
-            const diskConflict = await checkWebDiskPreconditionFromClient(
+            const refusal = await checkWebDiskPreconditionFromClient(
               session,
               file,
               diskPrecondition
             )
-            return diskConflict ? { ok: false, diskConflict } : { method: 'files.write', params }
+            return refusal ?? { method: 'files.write', params }
           },
           diskPrecondition !== undefined
         )

@@ -5,6 +5,13 @@ import type {
   FileWriteDiskPrecondition
 } from '../../../../shared/file-write-disk-precondition'
 import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
+import {
+  noteObservedDiskVersion,
+  settleEditorModelAfterOtherSurfaceSave,
+  settleEditorModelAfterSave,
+  type EditorSaveBaseline
+} from './editor-model-disk-baseline'
+import { getWrittenContentDiskSignature } from '../../../../shared/disk-baseline-signature'
 
 export const SAVE_REFUSED_CHANGED_ON_DISK_MESSAGE =
   'This file changed on disk. Review the change before saving.'
@@ -27,13 +34,49 @@ export function isConfirmedDiskOverwrite(
 export function getSaveDiskPrecondition(
   expectedSignature: string | undefined,
   trigger: 'autosave' | 'user',
-  overwriteConfirmed: boolean
+  overwriteConfirmed: boolean,
+  /** The version the conflict is with, when known: an overwrite replaces only that version. */
+  observedSignature?: string
 ): FileWriteDiskPrecondition | undefined {
-  if (overwriteConfirmed || expectedSignature === undefined) {
+  if (overwriteConfirmed) {
+    return observedSignature === undefined
+      ? undefined
+      : { expectedSignature: observedSignature, allowMissing: true }
+  }
+  if (expectedSignature === undefined) {
     return undefined
   }
   // Why: an explicit save may recreate a deleted file (nothing on disk to lose); autosave must not resurrect it.
   return trigger === 'user' ? { expectedSignature, allowMissing: true } : { expectedSignature }
+}
+
+/**
+ * After a write landed: the tab is now based on what it wrote. Why only if the store's record is
+ * the one the save began from: a reload during a slow remote reply recorded newer disk.
+ */
+export function adoptWrittenDiskVersion(
+  state: Pick<AppState, 'openFiles' | 'setLastKnownDiskSignature'>,
+  savedFile: Pick<OpenFile, 'id' | 'lastKnownDiskSignature'>,
+  saveBaseline: EditorSaveBaseline,
+  writtenContent: string
+): void {
+  const writtenSignature = getWrittenContentDiskSignature(writtenContent)
+  noteObservedDiskVersion(savedFile.id, undefined)
+  const liveFile = state.openFiles.find((openFile) => openFile.id === savedFile.id)
+  if (liveFile?.lastKnownDiskSignature === savedFile.lastKnownDiskSignature) {
+    state.setLastKnownDiskSignature(savedFile.id, writtenSignature)
+  }
+  if (saveBaseline.fromModel) {
+    settleEditorModelAfterSave(savedFile.id, saveBaseline.modelGeneration, writtenSignature)
+  } else {
+    // Why: another surface (rich markdown, CSV, notebook) changed disk under the retained model.
+    settleEditorModelAfterOtherSurfaceSave(
+      savedFile.id,
+      saveBaseline.modelGeneration,
+      writtenContent,
+      writtenSignature
+    )
+  }
 }
 
 /** Surfaces a refused save through the existing changed-on-disk banner or deleted tombstone. */
@@ -44,7 +87,8 @@ export function applySaveDiskConflict(
   >,
   fileId: string,
   diskConflict: FileWriteDiskConflict,
-  connectionId: string | undefined
+  connectionId: string | undefined,
+  currentSignature?: string
 ): void {
   const file = state.openFiles.find((openFile) => openFile.id === fileId)
   if (!file) {
@@ -60,5 +104,6 @@ export function applySaveDiskConflict(
     }
     return
   }
+  noteObservedDiskVersion(fileId, currentSignature)
   markFileChangedOnDisk(state, file, { connectionId, origin: 'live', saveRefused: true })
 }

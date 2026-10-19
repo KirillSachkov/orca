@@ -28,6 +28,12 @@ describe('disk write precondition', () => {
       diskConflict: 'missing'
     })
     expect(parseFileWriteResult({ ok: false })).toEqual({ ok: false, diskConflict: 'changed' })
+    expect(
+      parseFileWriteResult({ ok: false, diskConflict: 'changed', currentSignature: 'sig' })
+    ).toEqual({ ok: false, diskConflict: 'changed', currentSignature: 'sig' })
+    expect(
+      parseFileWriteResult({ ok: false, diskConflict: 'changed', currentSignature: 7 })
+    ).toEqual({ ok: false, diskConflict: 'changed' })
   })
 
   it('bounds the UTF-8 size a baseline can decode from', () => {

@@ -21,6 +21,7 @@ import {
   openLocalRegularFile,
   readLocalFileBounded
 } from './local-regular-file-read'
+import { MAX_TEXT_FILE_SIZE } from './filesystem-file-content-inspection'
 
 const HASH_SLICE_BYTES = 1024 * 1024
 
@@ -73,6 +74,22 @@ export async function checkLocalDiskWritePrecondition(
     return (await diskSignatureOfUtf8(buffer)) === precondition.expectedSignature ? null : 'changed'
   } finally {
     await handle.close()
+  }
+}
+
+/** The version on disk now, for a refusal's reply; undefined when missing, too large or unreadable. */
+async function currentLocalDiskSignature(filePath: string): Promise<string | undefined> {
+  try {
+    const { handle, stats } = await openLocalRegularFile(filePath)
+    try {
+      return await diskSignatureOfUtf8(
+        await readLocalFileBounded(handle, MAX_TEXT_FILE_SIZE, stats.size)
+      )
+    } finally {
+      await handle.close()
+    }
+  } catch {
+    return undefined
   }
 }
 
@@ -152,8 +169,15 @@ export async function writeLocalTextFileWithDiskPrecondition(
   }
   const compareAndWrite = async (): Promise<FileWriteResult> => {
     const diskConflict = await checkLocalDiskWritePrecondition(filePath, precondition)
-    if (diskConflict) {
+    if (diskConflict === 'missing') {
       return { ok: false, diskConflict }
+    }
+    if (diskConflict) {
+      // Why read again: a size-only refusal never hashed, and the caller adopts this on Keep My Edits.
+      const currentSignature = await currentLocalDiskSignature(filePath)
+      return currentSignature === undefined
+        ? { ok: false, diskConflict }
+        : { ok: false, diskConflict, currentSignature }
     }
     await writeFile(filePath, content, 'utf-8')
     return FILE_WRITE_OK
