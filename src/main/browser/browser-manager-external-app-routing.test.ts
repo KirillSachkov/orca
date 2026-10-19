@@ -76,6 +76,7 @@ describe('browserManager open-app prompt routing', () => {
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
       prependListener: vi.fn(),
+      once: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
@@ -101,6 +102,14 @@ describe('browserManager open-app prompt routing', () => {
       })
     }
     const untrustedFrame = { url: 'https://untrusted.example/ad', isDestroyed: () => false }
+    // After a Cancel the page stays quiet until the user clicks in it again.
+    const clickInPage = (): void => {
+      for (const [event, listener] of guestOnMock.mock.calls) {
+        if (event === 'input-event') {
+          listener({}, { type: 'mouseDown' })
+        }
+      }
+    }
 
     const windowOpenHandler = guestSetWindowOpenHandlerMock.mock.calls[0][0]
     expect(
@@ -115,6 +124,7 @@ describe('browserManager open-app prompt routing', () => {
     })
     expect(rendererSendMock).not.toHaveBeenCalledWith('browser:popup', expect.anything())
     answerLatest(false)
+    clickInPage()
     // A page that withholds its referrer is not credited to the top page.
     windowOpenHandler({
       url: 'mailto:help@example.com',
@@ -122,6 +132,7 @@ describe('browserManager open-app prompt routing', () => {
     })
     expect(prompts().at(-1)).toMatchObject({ origin: null })
     answerLatest(false)
+    clickInPage()
     expect(shellOpenExternalMock).not.toHaveBeenCalled()
 
     const willNavigate = guestOnMock.mock.calls.find(([event]) => event === 'will-navigate')?.[1]
@@ -137,5 +148,43 @@ describe('browserManager open-app prompt routing', () => {
     willNavigate({ preventDefault, initiator: null }, 'zoommtg://zoom.us/join?confno=2')
     expect(prompts().at(-1)).toMatchObject({ origin: null })
     answerLatest(false)
+  })
+
+  it('closes an open prompt when its page is closed', () => {
+    const rendererSendMock = vi.fn()
+    const guest = {
+      id: 108,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      prependListener: vi.fn(),
+      once: vi.fn(),
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    const renderer = { id: rendererWebContentsId, isDestroyed: () => false, send: rendererSendMock }
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === guest.id ? guest : id === rendererWebContentsId ? renderer : null
+    )
+    browserManager.attachGuestPolicies(webContentsFromIdMock(guest.id))
+    browserManager.registerGuest({
+      browserPageId: 'browser-2',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+    const willNavigate = guestOnMock.mock.calls.find(([event]) => event === 'will-navigate')?.[1]
+    willNavigate({ preventDefault: vi.fn(), initiator: null }, 'zoommtg://zoom.us/join?confno=1')
+    const requestId = rendererSendMock.mock.calls.find(
+      ([channel]) => channel === 'browser:external-app-requested'
+    )?.[1].requestId
+    expect(requestId).toEqual(expect.any(String))
+
+    browserManager.unregisterGuest('browser-2')
+
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:external-app-request-closed', {
+      requestId
+    })
   })
 })

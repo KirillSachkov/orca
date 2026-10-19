@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -13,6 +14,7 @@ vi.mock('electron', () => ({
 import type { BrowserExternalAppRequest } from '../../shared/browser-external-app'
 import {
   BROWSER_EXTERNAL_APP_PROMPT_TIMEOUT_MS,
+  cancelBrowserExternalAppRequests,
   requestBrowserExternalAppLaunch,
   respondToBrowserExternalAppRequest
 } from './browser-external-app-launch'
@@ -24,9 +26,28 @@ function mockRenderer(id: number): Electron.WebContents {
   return { id, isDestroyed: () => false, send: vi.fn() } as unknown as Electron.WebContents
 }
 
+const requesters: (Electron.WebContents & EventEmitter)[] = []
+
+/** The page contents that asks; only its id, liveness and input events matter to the launcher. */
+function mockRequester(): Electron.WebContents & EventEmitter {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launcher only reads id, isDestroyed and the input and destroyed events.
+  const contents = new EventEmitter() as Electron.WebContents & EventEmitter
+  Object.assign(contents, { id: 1000 + requesters.length, isDestroyed: () => false })
+  requesters.push(contents)
+  return contents
+}
+
+const pageRequesters = new Map<string, Electron.WebContents & EventEmitter>()
+
 function ask(renderer: Electron.WebContents, rawUrl = OKTA_URL, browserPageId = 'page-1') {
+  let requester = pageRequesters.get(browserPageId)
+  if (!requester) {
+    requester = mockRequester()
+    pageRequesters.set(browserPageId, requester)
+  }
   return requestBrowserExternalAppLaunch({
     context: { browserPageId, renderer },
+    requester,
     rawUrl,
     requestingUrl: () => 'https://acme.okta.com/signin'
   })
@@ -46,8 +67,12 @@ describe('browser external app launch', () => {
   })
 
   afterEach(() => {
-    // Expire anything a test left open so the next test's page is not throttled.
+    // Expire anything a test left open, then retire every page so no state leaks between tests.
     vi.advanceTimersByTime(BROWSER_EXTERNAL_APP_PROMPT_TIMEOUT_MS)
+    for (const requester of requesters.splice(0)) {
+      requester.emit('destroyed')
+    }
+    pageRequesters.clear()
     vi.useRealTimers()
   })
 
@@ -96,6 +121,7 @@ describe('browser external app launch', () => {
     const renderer = mockRenderer(40)
     requestBrowserExternalAppLaunch({
       context: { browserPageId: 'page-4', renderer },
+      requester: mockRequester(),
       rawUrl: OKTA_URL,
       requestingUrl: () => null
     })
@@ -106,6 +132,7 @@ describe('browser external app launch', () => {
     expect(
       requestBrowserExternalAppLaunch({
         context: null,
+        requester: mockRequester(),
         rawUrl: OKTA_URL,
         requestingUrl: () => null
       })
@@ -143,8 +170,60 @@ describe('browser external app launch', () => {
       respondToBrowserExternalAppRequest(renderer, { requestId: otherPage.requestId, open: true })
     ).toBe(false)
     expect(mocks.openExternal).toHaveBeenCalledTimes(1)
-    // An expired prompt no longer holds the page.
-    ask(renderer, OKTA_URL, 'page-2')
+  })
+
+  it('keeps a refused page quiet until the user clicks or types in it', () => {
+    const renderer = mockRenderer(50)
+
+    ask(renderer)
+    respondToBrowserExternalAppRequest(renderer, {
+      requestId: sentRequests(renderer)[0].requestId,
+      open: false
+    })
+    // A page looping a deep link cannot reopen the app-modal prompt after Cancel.
+    expect(ask(renderer)).toBe(true)
+    pageRequesters.get('page-1')?.emit('input-event', {}, { type: 'mouseMove' })
+    expect(ask(renderer)).toBe(true)
+    expect(sentRequests(renderer)).toHaveLength(1)
+
+    pageRequesters.get('page-1')?.emit('input-event', {}, { type: 'mouseDown' })
+    ask(renderer)
+    expect(sentRequests(renderer)).toHaveLength(2)
+
+    // Ignoring the prompt until it expires counts as a refusal too.
+    vi.advanceTimersByTime(BROWSER_EXTERNAL_APP_PROMPT_TIMEOUT_MS)
+    ask(renderer)
+    expect(sentRequests(renderer)).toHaveLength(2)
+    pageRequesters.get('page-1')?.emit('input-event', {}, { type: 'keyDown' })
+    ask(renderer)
     expect(sentRequests(renderer)).toHaveLength(3)
+
+    // Saying yes never silences the page.
+    respondToBrowserExternalAppRequest(renderer, {
+      requestId: sentRequests(renderer)[2].requestId,
+      open: true
+    })
+    ask(renderer)
+    expect(sentRequests(renderer)).toHaveLength(4)
+  })
+
+  it('closes the prompt when its page goes away, so Open cannot launch for it', () => {
+    const renderer = mockRenderer(60)
+    ask(renderer, OKTA_URL, 'page-6')
+    ask(renderer, OKTA_URL, 'page-7')
+    const [closedPage, livePage] = sentRequests(renderer)
+
+    cancelBrowserExternalAppRequests('page-6')
+
+    expect(renderer.send).toHaveBeenCalledWith('browser:external-app-request-closed', {
+      requestId: closedPage.requestId
+    })
+    expect(
+      respondToBrowserExternalAppRequest(renderer, { requestId: closedPage.requestId, open: true })
+    ).toBe(false)
+    expect(
+      respondToBrowserExternalAppRequest(renderer, { requestId: livePage.requestId, open: true })
+    ).toBe(true)
+    expect(mocks.openExternal).toHaveBeenCalledTimes(1)
   })
 })
