@@ -1,5 +1,6 @@
 import type { TaskPageGlobalEffectsModel } from './use-task-page-global-effects'
 import { useEffect } from 'react'
+import { isIntegrationCredentialDecryptionError } from '../../../shared/integration-credential-errors'
 import { saveLinearIssueView } from './linear-issue-view-storage'
 import { serializeLinearIssueViewResumeState } from '../../../shared/linear/issue-view-resume-state'
 import {
@@ -263,6 +264,11 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
           lastLinearRequestRef.current?.nonce !== linearRefreshNonce
         ) {
           return
+        }
+        // Why: a credential failure used to resolve as no rows; keep not showing the previous scope's rows.
+        if (isIntegrationCredentialDecryptionError(err)) {
+          setLinearIssues([])
+          setLinearIssuesHasMore(false)
         }
         setLinearError(err instanceof Error ? err.message : 'Failed to load Linear issues.')
         setLinearLoading(false)

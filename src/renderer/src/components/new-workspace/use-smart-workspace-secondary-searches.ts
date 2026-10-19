@@ -4,6 +4,10 @@ import { searchRuntimeRepoBaseRefDetails } from '@/runtime/runtime-repo-client'
 import { lookupLinearIssueUrl } from '@/lib/linear-issue-url-lookup'
 import { searchJiraIssuesByKeyOrText } from '@/components/jira-key-or-text-search'
 import { linearWorkspaceScopeSignature } from '../../../../shared/linear/workspace-types'
+import {
+  credentialDecryptionMessage,
+  isIntegrationCredentialDecryptionError
+} from '../../../../shared/integration-credential-errors'
 import { getSmartWorkspaceLinearSearchQuery } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import type { parseBoundedSmartWorkspaceLinearIssueUrlIntent } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import { RESULT_LIMIT } from './smart-workspace-name-field-model'
@@ -51,6 +55,7 @@ export function useSmartWorkspaceSecondarySearches({
     setLinearIssues,
     setLinearLoading,
     setSettledLinearUrlQuery,
+    setLinearReadError,
     jiraSourceContext,
     jiraConnectionStatus,
     jiraProject,
@@ -150,13 +155,11 @@ export function useSmartWorkspaceSecondarySearches({
   ])
 
   useEffect(() => {
-    // Why: a saved credential that cannot be decrypted stays connected, but another
-    // search only repeats the failure. Settle a URL read so the row is not left loading.
-    const credentialError = linearStatusRef.current.credentialError
-    if (disabled || !shouldQueryLinear || !linearConnected || Boolean(credentialError)) {
+    setLinearReadError(null)
+    if (disabled || !shouldQueryLinear || !linearConnected) {
       setLinearIssues([])
       setLinearLoading(false)
-      setSettledLinearUrlQuery(credentialError && linearUrlIntent ? linearQuery.trim() : null)
+      setSettledLinearUrlQuery(null)
       return
     }
     let stale = false
@@ -172,7 +175,11 @@ export function useSmartWorkspaceSecondarySearches({
           intent: linearUrlIntent,
           knownStatus: linearStatusRef.current,
           sourceContext: linearSourceContext,
-          fetchLinearIssue: linearReadMethodsRef.current.fetchLinearIssue
+          fetchLinearIssue: (identifier, workspaceId, options) =>
+            linearReadMethodsRef.current.fetchLinearIssue(identifier, workspaceId, {
+              ...options,
+              rejectCredentialError: true
+            })
         }).then((issue) => (issue ? [issue] : []))
       : trimmed
         ? linearReadMethodsRef.current.searchLinearIssues(
@@ -202,9 +209,13 @@ export function useSmartWorkspaceSecondarySearches({
           setLinearIssues(issues)
         }
       })
-      .catch(() => {
+      .catch((error) => {
         if (!stale) {
           setLinearIssues([])
+          // Why: the read reports its own host's failure; host-wide status may describe another host.
+          if (isIntegrationCredentialDecryptionError(error)) {
+            setLinearReadError(credentialDecryptionMessage('Linear'))
+          }
         }
       })
       .finally(() => {

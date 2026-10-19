@@ -5,7 +5,10 @@ import type {
   LinearSliceSet,
   LinearFetchOptions
 } from './linear-slice-contract'
-import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
+import {
+  credentialDecryptionMessage,
+  isIntegrationCredentialDecryptionError
+} from '../../../../../shared/integration-credential-errors'
 import { linearGetIssue } from '@/runtime/runtime-linear-issue-mutations'
 import {
   clearLinearIssueCollectionRequestMaps,
@@ -24,7 +27,6 @@ import {
   looksLikeAuthError,
   shouldRefreshStatusAfterRead
 } from './linear-cache'
-import { rememberLinearCredentialDecryptionError } from './linear-credential-read-failure'
 import type { InflightLinearIssueRequest } from './linear-slice-request-state'
 
 export function createLinearIssueDetailActions(
@@ -46,6 +48,10 @@ export function createLinearIssueDetailActions(
       if (isFresh(cached)) {
         return cached.data
       }
+      // Why: cards and sub-issue reads treat an unreadable issue as missing; only the
+      // composer's URL lookup asks to see the credential failure.
+      const settle = (request: Promise<LinearIssue | null>): Promise<LinearIssue | null> =>
+        options?.rejectCredentialError ? request : request.catch(() => null)
 
       const inflight = inflightIssueRequests.get(issueCacheKey)
       if (
@@ -53,7 +59,7 @@ export function createLinearIssueDetailActions(
         inflight.contextKey === contextKey &&
         inflight.mutationGeneration === getLinearMutationGeneration()
       ) {
-        return inflight.promise
+        return settle(inflight.promise)
       }
 
       let entry: InflightLinearIssueRequest
@@ -93,8 +99,10 @@ export function createLinearIssueDetailActions(
               scope.explicitSource
             )
           ) {
-            rememberLinearCredentialDecryptionError(set, get, error)
             void get().checkLinearConnection(true)
+          }
+          if (isIntegrationCredentialDecryptionError(error)) {
+            throw new Error(credentialDecryptionMessage('Linear'))
           }
           return null
         })
@@ -123,7 +131,7 @@ export function createLinearIssueDetailActions(
         mutationGeneration: requestMutationGeneration
       }
       inflightIssueRequests.set(issueCacheKey, entry)
-      return promise
+      return settle(promise)
     },
 
     refreshLinearIssue: async (

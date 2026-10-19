@@ -28,7 +28,7 @@ export type SmartWorkspaceNameFieldProps = {
   onLinearIssueSelect: (issue: LinearIssue) => void
   onJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
   onOpenJiraSettings?: () => void
-  onOpenLinearSettings?: () => void
+  onOpenLinearSettings?: (sourceContext: TaskSourceContext | null) => void
   selectedSource: SmartWorkspaceNameSelection | null
   onClearSelectedSource: () => void
   gitlabSourceContext?: TaskSourceContext | null

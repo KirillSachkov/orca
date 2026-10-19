@@ -1,14 +1,13 @@
 import React from 'react'
 import { Button } from '@/components/ui/button'
 import { CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
-import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { getSmartWorkspaceEmptyHint } from '../../../../shared/new-workspace/smart-workspace-source-results'
-import { openLinearIntegrationSettings } from './open-linear-integration-settings'
 import { getRowItemClassName, RowIcon, RowLabel } from './smart-workspace-source-row-content'
 import type { RowEntry } from './smart-workspace-name-field-model'
 import type { WorkItemSourceSearch } from './use-work-item-source-search'
+import type { TaskSourceContext } from '../../../../shared/task-source-context'
 
 export function SmartWorkspaceSourceResultList({
   model,
@@ -31,6 +30,7 @@ export function SmartWorkspaceSourceResultList({
     | 'searchResultRows'
     | 'linearStatusChecked'
     | 'linearStatus'
+    | 'linearReadError'
     | 'linearSourceContext'
     | 'showJiraSiteContext'
     | 'jiraConnectionStatus'
@@ -42,7 +42,7 @@ export function SmartWorkspaceSourceResultList({
   beforeResults?: React.ReactNode
   emptyHint?: string
   isRowDisabled?: (row: RowEntry) => boolean
-  onOpenLinearSettings?: () => void
+  onOpenLinearSettings?: (sourceContext: TaskSourceContext | null) => void
 }): React.JSX.Element {
   const {
     mode,
@@ -59,27 +59,10 @@ export function SmartWorkspaceSourceResultList({
     jiraConnectionStatus,
     reserveLinearLoadingResults,
     showLinearUrlLoadingFeedback,
+    linearReadError,
     linearSourceContext
   } = model
-  const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
-  const openSettingsPage = useAppStore((state) => state.openSettingsPage)
-  const setActiveRuntimeEnvironmentPreference = useAppStore(
-    (state) => state.setActiveRuntimeEnvironmentPreference
-  )
-  const linearCredentialError =
-    mode === 'linear' && linearStatusChecked ? (linearStatus.credentialError?.trim() ?? '') : ''
-  const openLinearSettings = (): void => {
-    if (onOpenLinearSettings) {
-      onOpenLinearSettings()
-      return
-    }
-    void openLinearIntegrationSettings({
-      sourceContext: linearSourceContext,
-      setActiveRuntimeEnvironmentPreference,
-      openSettingsTarget,
-      openSettingsPage
-    })
-  }
+  const visibleLinearReadError = mode === 'linear' || mode === 'smart' ? linearReadError : null
   return (
     <>
       {mode === 'gitlab' ? (
@@ -142,23 +125,25 @@ export function SmartWorkspaceSourceResultList({
               <div key={index} className="h-8 animate-pulse rounded bg-muted/40" />
             ))}
           </div>
-        ) : searchResultRows.length === 0 && (linearCredentialError || !typedTextActionRow) ? (
+        ) : searchResultRows.length === 0 && (visibleLinearReadError || !typedTextActionRow) ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-            {jiraSource.intent ? null : linearCredentialError ? (
-              <div className="space-y-2">
-                <p className="text-destructive">{linearCredentialError}</p>
-                <Button
-                  type="button"
-                  variant="link"
-                  size="xs"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={openLinearSettings}
-                >
-                  {translate(
-                    'auto.components.new.workspace.SmartWorkspaceNameField.openSettings',
-                    'Settings'
-                  )}
-                </Button>
+            {jiraSource.intent ? null : visibleLinearReadError ? (
+              <div role="status" aria-live="polite" className="space-y-2">
+                <p className="text-destructive">{visibleLinearReadError}</p>
+                {onOpenLinearSettings ? (
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="xs"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => onOpenLinearSettings(linearSourceContext)}
+                  >
+                    {translate(
+                      'auto.components.new.workspace.SmartWorkspaceNameField.openSettings',
+                      'Settings'
+                    )}
+                  </Button>
+                ) : null}
               </div>
             ) : mode === 'linear' && linearStatusChecked && !linearStatus.connected ? (
               translate(

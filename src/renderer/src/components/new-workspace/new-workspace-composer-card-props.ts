@@ -85,7 +85,7 @@ export type NewWorkspaceComposerCardProps = {
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   onSmartJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
   onOpenJiraSettings?: () => void
-  onOpenLinearSettings?: () => void
+  onOpenLinearSettings?: (sourceContext: TaskSourceContext | null) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
   canReuseSelectedBranch: boolean

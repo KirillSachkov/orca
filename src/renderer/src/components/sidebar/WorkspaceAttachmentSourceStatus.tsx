@@ -17,18 +17,16 @@ export function WorkspaceAttachmentSourceStatus({
   error: string | null
   onRetry: () => void
 }): React.JSX.Element | null {
-  const credentialError = controller.linearStatus.credentialError?.trim() ?? ''
-  // Why: the Linear result list already shows this message and the Settings link.
-  const listOwnsCredentialError =
-    controller.mode === 'linear' &&
-    controller.linearStatusChecked &&
-    credentialError.length > 0 &&
-    controller.searchResultRows.length === 0
-  if (!error && listOwnsCredentialError && taskUrlProvider !== 'jira') {
+  const linearReadError =
+    controller.mode === 'linear' || controller.mode === 'smart' ? controller.linearReadError : null
+  // Why: an empty result list already shows the Linear read error.
+  if (!error && linearReadError && controller.searchResultRows.length === 0) {
     return null
   }
   let message =
-    error ?? translate('workspace.links.inlineSearchHint', 'Select a result to attach it.')
+    error ??
+    linearReadError ??
+    translate('workspace.links.inlineSearchHint', 'Select a result to attach it.')
   let retry: (() => void) | null = null
   if (!error && taskUrlProvider === 'jira') {
     if (controller.jiraSource.intent) {
@@ -58,8 +56,6 @@ export function WorkspaceAttachmentSourceStatus({
         'Connect Linear in Settings to link this issue.'
       )
       retry = onRetry
-    } else if (credentialError) {
-      message = credentialError
     } else if (controller.unresolvedLinearUrlIntent || controller.linearLoading) {
       message = translate('workspace.links.loadingLinear', 'Loading Linear issue…')
     } else {
