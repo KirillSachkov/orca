@@ -28,17 +28,18 @@ export function TaskPageLinearIssueBoard({
     activeLinearIssues,
     activeLinearIssueLoading,
     activeLinearIssueError,
-    activeLinearIssueReadError,
+    linearError,
     activeLinearIssueHasCollectionError,
     activeLinearIssueContextLabel,
     linearSearchActive,
     filteredLinearIssues
   } = model
-  // Why: the selected scope's own read decides; host-wide status flags any broken workspace.
+  // Why: the plain list's own read decides; host-wide status flags any broken workspace.
   const linearLoginUnreadable =
     activeLinearIssues.length === 0 &&
-    Boolean(activeLinearIssueReadError) &&
-    isIntegrationCredentialDecryptionError(activeLinearIssueReadError)
+    !activeLinearIssueContextLabel &&
+    Boolean(linearError) &&
+    isIntegrationCredentialDecryptionError(linearError)
   return (
     <div
       className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"

@@ -70,13 +70,13 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageGitLabLoadi
       : selectedLinearCustomView?.model === 'issue'
         ? linearCustomViewContentsLoading
         : linearLoading
-  const activeLinearIssueReadError =
-    selectedLinearProject && linearProjectTab === 'issues'
+  const activeLinearIssueError =
+    linearStatus.credentialError ??
+    (selectedLinearProject && linearProjectTab === 'issues'
       ? linearProjectIssuesError
       : selectedLinearCustomView?.model === 'issue'
         ? linearCustomViewContentsError
-        : linearError
-  const activeLinearIssueError = linearStatus.credentialError ?? activeLinearIssueReadError
+        : linearError)
   const activeLinearIssueCollectionErrors =
     selectedLinearProject && linearProjectTab === 'issues'
       ? linearProjectIssuesResult.errors
@@ -204,7 +204,6 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageGitLabLoadi
     activeLinearIssues: typeof activeLinearIssues
     activeLinearIssueLoading: typeof activeLinearIssueLoading
     activeLinearIssueError: typeof activeLinearIssueError
-    activeLinearIssueReadError: typeof activeLinearIssueReadError
     activeLinearIssueCollectionErrors: typeof activeLinearIssueCollectionErrors
     activeLinearIssueHasCollectionError: typeof activeLinearIssueHasCollectionError
     activeLinearIssueContextLabel: typeof activeLinearIssueContextLabel
@@ -226,7 +225,6 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageGitLabLoadi
   nextModel.activeLinearIssues = activeLinearIssues
   nextModel.activeLinearIssueLoading = activeLinearIssueLoading
   nextModel.activeLinearIssueError = activeLinearIssueError
-  nextModel.activeLinearIssueReadError = activeLinearIssueReadError
   nextModel.activeLinearIssueCollectionErrors = activeLinearIssueCollectionErrors
   nextModel.activeLinearIssueHasCollectionError = activeLinearIssueHasCollectionError
   nextModel.activeLinearIssueContextLabel = activeLinearIssueContextLabel
