@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserExternalAppRequest } from '../../../../shared/browser-external-app'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
+
+const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }))
+vi.mock('sonner', () => ({ toast: { error: toastError } }))
+
 import { subscribeBrowserExternalAppConfirmation } from './browser-external-app-confirmation'
 
 const respondExternalApp = vi.fn()
@@ -38,6 +42,8 @@ function installSubscription(confirm: ConfirmationDialogContextValue): {
 
 beforeEach(() => {
   respondExternalApp.mockReset()
+  respondExternalApp.mockResolvedValue('answered')
+  toastError.mockReset()
 })
 
 describe('browser external-app confirmation', () => {
@@ -79,6 +85,21 @@ describe('browser external-app confirmation', () => {
         description: 'A page in the browser wants to open another application.',
         confirmLabel: 'Open link'
       })
+    )
+  })
+
+  it('says so when the user chose Open but no app could be started', async () => {
+    const { emit } = installSubscription(
+      vi.fn<ConfirmationDialogContextValue>().mockResolvedValue(true)
+    )
+    respondExternalApp.mockResolvedValue('launch-failed')
+
+    emit({ requestId: 'r4', appName: null, scheme: 'zoommtg', origin: null })
+
+    await vi.waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        "Couldn't open an app for this zoommtg link. It may not be installed."
+      )
     )
   })
 

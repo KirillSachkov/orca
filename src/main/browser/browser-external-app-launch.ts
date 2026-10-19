@@ -3,7 +3,8 @@ import { app, shell } from 'electron'
 
 import type {
   BrowserExternalAppRequest,
-  BrowserExternalAppResponse
+  BrowserExternalAppResponse,
+  BrowserExternalAppResponseResult
 } from '../../shared/browser-external-app'
 import { DOC_PREVIEW_SCHEME } from '../../shared/doc-preview-scheme'
 import { isActivatingBrowserGuestInput } from './browser-guest-input-gesture'
@@ -211,28 +212,31 @@ export function requestBrowserExternalAppLaunch(args: {
   return true
 }
 
-export function respondToBrowserExternalAppRequest(
+export async function respondToBrowserExternalAppRequest(
   sender: Electron.WebContents,
   response: BrowserExternalAppResponse
-): boolean {
+): Promise<BrowserExternalAppResponseResult> {
   if (
     !response ||
     typeof response.requestId !== 'string' ||
     typeof response.open !== 'boolean' ||
     pendingLaunches.get(response.requestId)?.renderer.id !== sender.id
   ) {
-    return false
+    return 'rejected'
   }
   const pending = dropPendingLaunch(response.requestId)
   if (!pending) {
-    return true
+    return 'rejected'
   }
-  if (response.open) {
-    shell.openExternal(pending.url).catch((error: unknown) => {
-      console.warn('[browser] Could not open link in another app:', error)
-    })
-  } else {
+  if (!response.open) {
     silenceUntilInput(pending.requester)
+    return 'answered'
   }
-  return true
+  try {
+    await shell.openExternal(pending.url)
+    return 'answered'
+  } catch (error) {
+    console.warn('[browser] Could not open link in another app:', error)
+    return 'launch-failed'
+  }
 }

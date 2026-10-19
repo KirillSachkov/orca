@@ -20,7 +20,10 @@ import {
   respondToBrowserWebAuthnAccountRequest
 } from '../browser/browser-webauthn-account-picker'
 import type { BrowserWebAuthnAccountResponse } from '../../shared/browser-webauthn-account'
-import type { BrowserExternalAppResponse } from '../../shared/browser-external-app'
+import type {
+  BrowserExternalAppResponse,
+  BrowserExternalAppResponseResult
+} from '../../shared/browser-external-app'
 import { respondToBrowserExternalAppRequest } from '../browser/browser-external-app-launch'
 
 let agentBrowserBridgeRef: AgentBrowserBridge | null = null
@@ -198,9 +201,9 @@ export function registerBrowserHandlers(): void {
 
   ipcMain.handle(
     'browser:respondExternalApp',
-    (event, response: BrowserExternalAppResponse): boolean => {
+    (event, response: BrowserExternalAppResponse): Promise<BrowserExternalAppResponseResult> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
-        return false
+        return Promise.resolve('rejected')
       }
       return respondToBrowserExternalAppRequest(event.sender, response)
     }

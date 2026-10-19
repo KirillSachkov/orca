@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { toast } from 'sonner'
 import type { BrowserExternalAppRequest } from '../../../../shared/browser-external-app'
 import {
   useConfirmationDialog,
@@ -57,10 +58,24 @@ export function subscribeBrowserExternalAppConfirmation(
   const unsubscribeRequests = window.api.browser.onExternalAppRequest((request) => {
     const prompt = new AbortController()
     prompts.set(request.requestId, prompt)
-    void confirmExternalApp(confirm, request, prompt.signal).then((open) => {
+    void confirmExternalApp(confirm, request, prompt.signal).then(async (open) => {
       prompts.delete(request.requestId)
-      if (!prompt.signal.aborted) {
-        void window.api.browser.respondExternalApp({ requestId: request.requestId, open })
+      if (prompt.signal.aborted) {
+        return
+      }
+      const result = await window.api.browser.respondExternalApp({
+        requestId: request.requestId,
+        open
+      })
+      if (result === 'launch-failed') {
+        // Why: the user chose Open, so a silent failure would read as the click doing nothing.
+        toast.error(
+          translate(
+            'auto.components.browserPane.externalApp.launchFailed',
+            "Couldn't open an app for this {{scheme}} link. It may not be installed.",
+            { scheme: request.scheme }
+          )
+        )
       }
     })
   })

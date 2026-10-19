@@ -76,7 +76,7 @@ describe('browser external app launch', () => {
     vi.useRealTimers()
   })
 
-  it('asks the window showing the page and opens the app only after a yes', () => {
+  it('asks the window showing the page and opens the app only after a yes', async () => {
     const renderer = mockRenderer(10)
 
     expect(ask(renderer)).toBe(true)
@@ -90,9 +90,9 @@ describe('browser external app launch', () => {
     })
     expect(mocks.openExternal).not.toHaveBeenCalled()
 
-    expect(
+    await expect(
       respondToBrowserExternalAppRequest(renderer, { requestId: request.requestId, open: true })
-    ).toBe(true)
+    ).resolves.toBe('answered')
     expect(mocks.openExternal).toHaveBeenCalledWith(OKTA_URL)
 
     expect(ask(renderer, 'zoommtg://zoom.us/join?confno=1')).toBe(true)
@@ -144,7 +144,7 @@ describe('browser external app launch', () => {
     ).toBe(false)
   })
 
-  it('keeps one prompt per page and accepts each answer once, from its own window', () => {
+  it('keeps one prompt per page and accepts each answer once, from its own window', async () => {
     const renderer = mockRenderer(30)
     const otherWindow = mockRenderer(31)
 
@@ -155,15 +155,15 @@ describe('browser external app launch', () => {
     const [first, otherPage] = sentRequests(renderer)
     expect(sentRequests(renderer)).toHaveLength(2)
 
-    expect(
+    await expect(
       respondToBrowserExternalAppRequest(otherWindow, { requestId: first.requestId, open: true })
-    ).toBe(false)
-    expect(
+    ).resolves.toBe('rejected')
+    await expect(
       respondToBrowserExternalAppRequest(renderer, { requestId: first.requestId, open: true })
-    ).toBe(true)
-    expect(
+    ).resolves.toBe('answered')
+    await expect(
       respondToBrowserExternalAppRequest(renderer, { requestId: first.requestId, open: true })
-    ).toBe(false)
+    ).resolves.toBe('rejected')
     expect(mocks.openExternal).toHaveBeenCalledTimes(1)
 
     vi.advanceTimersByTime(BROWSER_EXTERNAL_APP_PROMPT_TIMEOUT_MS)
@@ -171,10 +171,23 @@ describe('browser external app launch', () => {
     expect(renderer.send).toHaveBeenCalledWith('browser:external-app-request-closed', {
       requestId: otherPage.requestId
     })
-    expect(
+    await expect(
       respondToBrowserExternalAppRequest(renderer, { requestId: otherPage.requestId, open: true })
-    ).toBe(false)
+    ).resolves.toBe('rejected')
     expect(mocks.openExternal).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports a launch the OS could not start, so the window can say so', async () => {
+    const renderer = mockRenderer(70)
+    mocks.openExternal.mockRejectedValueOnce(new Error('no application for scheme'))
+    ask(renderer, 'zoommtg://zoom.us/join?confno=1', 'page-8')
+
+    await expect(
+      respondToBrowserExternalAppRequest(renderer, {
+        requestId: sentRequests(renderer)[0].requestId,
+        open: true
+      })
+    ).resolves.toBe('launch-failed')
   })
 
   it('keeps a refused page quiet until the user clicks or types in it', () => {
@@ -212,7 +225,7 @@ describe('browser external app launch', () => {
     expect(sentRequests(renderer)).toHaveLength(4)
   })
 
-  it('closes the prompt when its page goes away, so Open cannot launch for it', () => {
+  it('closes the prompt when its page goes away, so Open cannot launch for it', async () => {
     const renderer = mockRenderer(60)
     ask(renderer, OKTA_URL, 'page-6')
     ask(renderer, OKTA_URL, 'page-7')
@@ -223,12 +236,12 @@ describe('browser external app launch', () => {
     expect(renderer.send).toHaveBeenCalledWith('browser:external-app-request-closed', {
       requestId: closedPage.requestId
     })
-    expect(
+    await expect(
       respondToBrowserExternalAppRequest(renderer, { requestId: closedPage.requestId, open: true })
-    ).toBe(false)
-    expect(
+    ).resolves.toBe('rejected')
+    await expect(
       respondToBrowserExternalAppRequest(renderer, { requestId: livePage.requestId, open: true })
-    ).toBe(true)
+    ).resolves.toBe('answered')
     expect(mocks.openExternal).toHaveBeenCalledTimes(1)
   })
 })

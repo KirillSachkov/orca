@@ -13,3 +13,6 @@ export type BrowserExternalAppResponse = {
   requestId: string
   open: boolean
 }
+
+/** `launch-failed`: the user chose Open but the OS could not start an app, e.g. none is installed. */
+export type BrowserExternalAppResponseResult = 'rejected' | 'answered' | 'launch-failed'

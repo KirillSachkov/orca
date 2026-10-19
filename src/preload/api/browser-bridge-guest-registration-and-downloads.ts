@@ -6,7 +6,8 @@ import type {
 } from '../../shared/browser-webauthn-account'
 import type {
   BrowserExternalAppRequest,
-  BrowserExternalAppResponse
+  BrowserExternalAppResponse,
+  BrowserExternalAppResponseResult
 } from '../../shared/browser-external-app'
 import { readBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
 import { browserClientPageRendererRequests } from '../preload-runtime-support'
@@ -67,7 +68,9 @@ export const browserGuestRegistrationAndDownloadsApi = {
     ipcRenderer.on('browser:external-app-request-closed', listener)
     return () => ipcRenderer.removeListener('browser:external-app-request-closed', listener)
   },
-  respondExternalApp: (response: BrowserExternalAppResponse): Promise<boolean> =>
+  respondExternalApp: (
+    response: BrowserExternalAppResponse
+  ): Promise<BrowserExternalAppResponseResult> =>
     ipcRenderer.invoke('browser:respondExternalApp', response),
   openDevTools: (args: { browserPageId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:openDevTools', args),
