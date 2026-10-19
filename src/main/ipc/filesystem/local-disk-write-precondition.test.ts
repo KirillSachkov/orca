@@ -42,8 +42,11 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       return actual.realpath(path)
     },
     // Why: 9P and some SMB mounts report inode 0 for every file.
-    stat: async (...args: Parameters<typeof actual.stat>) => {
-      const stats = await actual.stat(...args)
+    stat: async (path: string, options?: { bigint?: boolean }) => {
+      if (options?.bigint !== true) {
+        return actual.stat(path)
+      }
+      const stats = await actual.stat(path, { bigint: true })
       return zeroInodes.enabled ? Object.assign(stats, { ino: 0n }) : stats
     },
     // Why: holds one save between its passed check and its write, where a competing save must wait.
