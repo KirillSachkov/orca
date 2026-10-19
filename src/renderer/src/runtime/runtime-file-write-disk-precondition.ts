@@ -30,6 +30,16 @@ import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
  * For a host that would strip the precondition: compare from here before the unguarded write.
  * A read failure that doesn't prove the disk state fails the save rather than writing unverified.
  */
+/** `files.write` params; the guarded method adds `diskPrecondition`. */
+export type RemoteFileWriteParams = {
+  worktree: string
+  relativePath: string
+  content: string
+  expectedExecutionHostId: 'local' | `ssh:${string}`
+  expectedSshTargetId?: string
+  expectedSshConnectionGeneration?: number
+}
+
 type RemoteFileContext = RuntimeFileOperationArgs & {
   target: RuntimeClientTarget & { kind: 'environment' }
 }
@@ -72,7 +82,7 @@ export async function writeRemoteFileIfUnchanged(
   context: RemoteFileContext,
   filePath: string,
   content: string,
-  params: object,
+  params: RemoteFileWriteParams,
   precondition: FileWriteDiskPrecondition
 ): Promise<FileWriteResult> {
   const attempt = async (): Promise<FileWriteResult> =>
