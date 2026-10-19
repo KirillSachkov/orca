@@ -93,7 +93,7 @@ export function registerRepoCatalogHandlers(mainWindow: BrowserWindow, store: St
       if (isWslMoveSourceHost(hostId)) {
         assertWslMoveProjectWritable(store, { repoId: args.repoId })
       }
-      store.removeProjectForHost(args.repoId, hostId)
+      store.removeProjectForHost({ id: args.repoId, executionHostId: hostId })
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
     }
