@@ -67,7 +67,7 @@ function renderSectionActions(section: DiffSection) {
     })
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the save path calls only getValue.
-  const editor = { getValue: () => 'mine' } as monacoEditor.IStandaloneCodeEditor
+  const editor = { getValue: () => section.modifiedContent } as monacoEditor.IStandaloneCodeEditor
   result.current.modifiedEditorsRef.current.set(0, editor)
   return { result, setSections, requestSectionReload }
 }

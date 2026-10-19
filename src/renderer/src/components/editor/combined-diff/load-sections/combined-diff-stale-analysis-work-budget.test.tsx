@@ -279,6 +279,32 @@ describe('combined diff discarded-result analysis budget', () => {
     }
   )
 
+  it('keeps what the user types while a reload of the section is in flight', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const loads: ReturnType<typeof deferredResult>[] = []
+    mocks.fetch.mockImplementation(() => {
+      const load = deferredResult()
+      loads.push(load)
+      return load.promise
+    })
+    const hook = await startViewer()
+    await settle(loads[0]!, textResult('base', 'v1'))
+    hook.result.current.registry.renderedIndicesRef.current.add(0)
+    // The refusal toast's Reload: edits dropped, then a slow read starts.
+    hook.result.current.retry.requestSectionReload(0)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300)
+    })
+    await flushLoads()
+    act(() => {
+      hook.result.current.setSections((prev) =>
+        prev.map((section) => ({ ...section, dirty: true, modifiedContent: 'typed' }))
+      )
+    })
+    await settle(loads[1]!, textResult('base', 'v2'))
+    expect(hook.result.current.sections[0]).toMatchObject({ dirty: true, modifiedContent: 'typed' })
+  })
+
   it('keeps synchronous token-reload reentry into a replacement generation', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const body = 'reentrant obsolete\n'.padEnd(65_536, 'x')

@@ -13,8 +13,8 @@ import {
   type FileWriteResult
 } from '../../../shared/file-write-disk-precondition'
 import { isENOENT } from '../filesystem-path-containment'
-import { stat, writeFile } from 'node:fs/promises'
-import { basename, dirname, join, normalize } from 'node:path'
+import { readlink, stat, writeFile } from 'node:fs/promises'
+import { basename, dirname, join, normalize, resolve } from 'node:path'
 import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
 import { serializedParentDirectoryKey } from '../../destination-serialized-local-rename'
 import {
@@ -79,8 +79,27 @@ export async function checkLocalDiskWritePrecondition(
 const editorWritesByPath = new Map<string, Promise<void>>()
 const editorWritesByInode = new Map<string, Promise<void>>()
 
-/** A file's canonical path: real parent plus a case- and Unicode-folded name (folding only over-serializes). */
-async function editorWritePathKey(filePath: string): Promise<string> {
+const MAX_SYMLINK_HOPS = 16
+
+/** Follows a symlink chain by hand, since realpath fails once its final target is missing. */
+async function followSymlinks(filePath: string): Promise<string> {
+  let current = filePath
+  for (let hop = 0; hop < MAX_SYMLINK_HOPS; hop += 1) {
+    try {
+      current = resolve(dirname(current), await readlink(current))
+    } catch {
+      return current
+    }
+  }
+  return current
+}
+
+/**
+ * A file's canonical path: real parent plus a case- and Unicode-folded name (folding only
+ * over-serializes). Symlinks are followed first, so a dangling link and its future target share it.
+ */
+async function editorWritePathKey(requestedPath: string): Promise<string> {
+  const filePath = await followSymlinks(requestedPath)
   let parentKey: string
   try {
     parentKey = await serializedParentDirectoryKey(filePath)

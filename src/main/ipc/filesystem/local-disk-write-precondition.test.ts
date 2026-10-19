@@ -302,6 +302,26 @@ describe('local provider guarded write', () => {
     expect(await readFile(filePath, 'utf8')).toBe('created')
   })
 
+  it.skipIf(process.platform === 'win32')(
+    'lets only one save create a missing file reached through a dangling symlink',
+    async () => {
+      const target = join(base, 'target.ts')
+      const link = join(base, 'link.ts')
+      await symlink(target, link)
+      const createIfMissing = {
+        expectedSignature: getDiskBaselineSignature('original'),
+        allowMissing: true
+      }
+
+      const results = await Promise.all([
+        provider().writeFileWithDiskPrecondition(target, 'through target', createIfMissing),
+        provider().writeFileWithDiskPrecondition(link, 'through link', createIfMissing)
+      ])
+
+      expect(results.filter((result) => result.ok)).toHaveLength(1)
+    }
+  )
+
   it('does not hold up a save to another file in the folder behind a stuck read', async () => {
     const stuck = join(base, 'stuck.ts')
     const other = join(base, 'other.ts')

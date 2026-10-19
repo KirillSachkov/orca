@@ -188,7 +188,8 @@ export function useCombinedDiffSectionActions({
             overwrite: () => {
               const current = sectionsRef.current[currentIndex()]
               // The draft lives in section state; position-keyed editors can belong to another row by now.
-              if (current?.dirty) {
+              // Why same draft: the user confirmed overwriting with the version that was refused, not later edits.
+              if (current?.dirty && current.modifiedContent === content) {
                 void writeSectionRef.current(current, current.modifiedContent, true)
               }
             },

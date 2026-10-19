@@ -127,4 +127,18 @@ describe('resolving a refused section save after the section list changed', () =
 
     expect(mocks.writeRuntimeFile).toHaveBeenCalledTimes(1)
   })
+
+  it('ignores a stale Overwrite once the section holds a newer draft', async () => {
+    mocks.writeRuntimeFile.mockResolvedValue({ ok: false, diskConflict: 'changed' })
+    const refused = section('a.ts', 'a draft')
+    const { hook, showSections } = renderActions([refused])
+    hook.result.current.modifiedEditorsRef.current.set(0, editorShowing('a draft'))
+    await act(() => hook.result.current.handleSectionSaveRef.current(0))
+
+    // The user kept editing after the refusal; the old toast must not write this unseen version.
+    showSections([{ ...refused, modifiedContent: 'newer draft' }])
+    await act(async () => clickOverwrite())
+
+    expect(mocks.writeRuntimeFile).toHaveBeenCalledTimes(1)
+  })
 })
