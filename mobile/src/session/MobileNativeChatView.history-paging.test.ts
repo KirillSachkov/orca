@@ -263,8 +263,10 @@ describe('MobileNativeChatView: history paging and anchoring', () => {
       scrollTo(500, 1_000)
       resized()
       const pins = scrollToOffset.mock.calls.length
+      // Each step's frame reconciles what it drew, as the browser's resize step does.
       for (let top = 499; top >= 470; top -= 1) {
         scrollTo(top, 1_000)
+        resized()
       }
       // A reply lands: the reader who dragged 30px up is not pulled back to the end.
       pageScroller.scrollHeight = 1_063
