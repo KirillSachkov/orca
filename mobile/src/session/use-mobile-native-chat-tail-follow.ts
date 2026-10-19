@@ -191,7 +191,10 @@ export function useMobileNativeChatTailFollow(args: {
           if (by === 'reader' && moved < 0 && fromEnd > PAGE_MOVE_SLOP) {
             setFollowing(false)
           }
-        } else if (by !== 'own' && moved > PAGE_MOVE_SLOP && fromEnd <= AT_TAIL_SLOP) {
+        } else if (
+          (by === 'reader' && moved > 0 && fromEnd <= PAGE_MOVE_SLOP) ||
+          (by !== 'own' && moved > PAGE_MOVE_SLOP && fromEnd <= AT_TAIL_SLOP)
+        ) {
           setFollowing(true)
         }
       })

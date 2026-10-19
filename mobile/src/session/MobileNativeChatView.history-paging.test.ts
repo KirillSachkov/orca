@@ -279,6 +279,33 @@ describe('MobileNativeChatView: history paging and anchoring', () => {
       expect(scrollToOffset.mock.calls.length).toBe(pins)
     })
 
+    it('resumes following after a slow one-pixel return to the end on Safari', async () => {
+      vi.stubGlobal('navigator', {
+        userAgent:
+          'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/604.1'
+      })
+      await render({ folded: ['a1', 'a2', 'a3'].map((id) => assistantTurn(id, id)) })
+      scrollTo(500, 1_000)
+      resized()
+      // Deliver the initial pin's own scroll before the reader moves.
+      scrollTo(500, 1_000)
+      scrollTo(470, 1_000)
+      resized()
+      const pins = scrollToOffset.mock.calls.length
+
+      for (let top = 471; top <= 500; top += 1) {
+        scrollTo(top, 1_000)
+        resized()
+        expect(scrollToOffset.mock.calls.length).toBe(pins)
+      }
+
+      pageScroller.scrollHeight = 1_063
+      resized()
+      expect(scrollToOffset.mock.calls.length).toBe(pins + 1)
+      expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 563 })
+      expect(pageScroller.scrollTop).toBe(563)
+    })
+
     it.each([false, true])(
       'leaves a parked reader parked when a collapse below them clamps the page onto its end (finger down: %s)',
       async (fingerDown) => {
